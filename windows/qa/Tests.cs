@@ -1,0 +1,361 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using Forms = System.Windows.Forms;
+
+namespace Snapline
+{
+    internal static class Tests
+    {
+        private static readonly List<string> checks = new List<string>();
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string className, string title);
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint process);
+        [DllImport("user32.dll")]
+        private static extern bool PostThreadMessage(uint thread, int message, IntPtr wParam, IntPtr lParam);
+
+        [STAThread]
+        private static int Main(string[] args)
+        {
+            string output = Path.GetFullPath(args[0]);
+            string root = Path.Combine(output, "run-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+            Directory.CreateDirectory(root);
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            DataObject clipboardBackup = BackupClipboard();
+            bool clipboardUsed = false;
+            Controller controller = null;
+            try
+            {
+                // Storage behavior: use only generated fixtures in an isolated directory.
+                var store = new ImageStore(Path.Combine(root, "store"));
+                var image = Fixture(700, 420, 0);
+                var first = store.AddBitmap(image);
+                Check(first != null && File.Exists(first.Path), "Clipboard images are saved as real PNG files");
+                Check(ImageStore.Digest(ImageStore.Load(first.Path, 0)) == ImageStore.Digest(image), "PNG preserves source pixels");
+                Check(store.AddBitmap(image) == null && store.Items.Count == 1, "Repeated images do not duplicate");
+                string external = Path.Combine(root, "中文 图片.png");
+                File.WriteAllBytes(external, ImageStore.Png(Fixture(500, 310, 1)));
+                var externalShot = store.AddFile(external, true);
+                Check(externalShot != null && !store.Owns(external), "Unicode external paths stay external");
+                Check(store.Owns(first.Path), "Own screenshots are distinguished from originals");
+                string sibling = Path.Combine(store.Root, "Inbox-other");
+                Directory.CreateDirectory(sibling);
+                string siblingFile = Path.Combine(sibling, "image.png");
+                File.Copy(external, siblingFile);
+                Check(!store.Owns(siblingFile), "Ownership check rejects similarly named sibling folders");
+                store.Remove(externalShot, true);
+                Check(File.Exists(external) && store.Items.Count == 1, "Taking down external images preserves original files");
+                var recyclable = store.AddBitmap(Fixture(420, 300, 2));
+                store.Remove(recyclable, true);
+                Check(!File.Exists(recyclable.Path) && store.Items.Count == 1, "Own captures can be taken down using the Windows recycle-bin API");
+                store.Settings.ListenClipboard = false;
+                store.Save();
+                var restored = new ImageStore(store.Root);
+                Check(restored.Items.Count == 1 && !restored.Settings.ListenClipboard, "Images and preferences survive restart");
+                File.Delete(first.Path);
+                restored.Prune();
+                Check(restored.Items.Count == 0, "Files moved away disappear from the line");
+                for (int i = 0; i < 14; i++) restored.AddBitmap(Fixture(300 + i, 220, i));
+                Check(restored.Items.Count == 12 && Directory.GetFiles(restored.Inbox, "*.png").Length == 14, "Capacity limit retains older PNG files");
+                restored.Clear();
+                Check(restored.Items.Count == 0 && Directory.GetFiles(restored.Inbox, "*.png").Length == 14, "Clear takes down cards without deleting captures");
+                var transparent = BitmapSource.Create(2, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 10, 20, 30, 0, 40, 50, 60, 0 }, 8);
+                var repaired = Controller.RepairBitmapAlpha(transparent);
+                var pixels = new byte[8]; repaired.CopyPixels(pixels, 8, 0);
+                Check(pixels[3] == 255 && pixels[7] == 255 && pixels[0] == 10, "Legacy zero-alpha clipboard bitmaps stay visible");
+
+                // Live WPF/Win32 checks: hidden message window, real clipboard, real overlay.
+                controller = new Controller(Path.Combine(root, "live"), false);
+                controller.Busy = true;
+                Check(controller.Sink.ClipboardRegistered, "Windows clipboard listener registers");
+                Console.WriteLine("Global shortcut registration: " + controller.Sink.HotkeyRegistered + ", Windows error: " + controller.Sink.HotkeyError);
+                Check(controller.Sink.HotkeyRegistered, controller.Sink.HotkeyText + " registers as a global hotkey");
+                clipboardUsed = true;
+                Clipboard.SetImage(Fixture(600, 400, 2));
+                Pump(1100);
+                Check(controller.Store.Items.Count == 1, "WM_CLIPBOARDUPDATE captures a new system clipboard image");
+                var live = controller.Store.Items[0];
+                Check(controller.Copy(live), "Copy action writes clipboard formats");
+                Pump(600);
+                var copiedPng = Clipboard.GetData("PNG") as MemoryStream;
+                Check(Clipboard.ContainsImage() && copiedPng != null && copiedPng.Length > 8 && Clipboard.ContainsFileDropList(), "Copy offers readable bitmap, PNG and file-drop formats");
+                Check(controller.Store.Items.Count == 1, "Copying a hung screenshot does not feed back into capture");
+                Check(ImageStore.Digest(Clipboard.GetImage()) == ImageStore.Digest(ImageStore.Load(live.Path, 0)), "Copied image matches saved source pixels");
+                controller.Store.Settings.ListenClipboard = false;
+                Clipboard.SetImage(Fixture(320, 200, 3));
+                Pump(500);
+                Check(controller.Store.Items.Count == 1, "Clipboard capture can be disabled");
+                controller.Store.Settings.ListenClipboard = true;
+                var pngOnly = new DataObject();
+                pngOnly.SetData("PNG", new MemoryStream(ImageStore.Png(Fixture(310, 220, 4))), false);
+                Clipboard.SetDataObject(pngOnly, true);
+                Pump(600);
+                Check(controller.Store.Items.Count == 2, "PNG-only clipboard images are captured without relying on ContainsData");
+
+                // Watch files written in stages, editor saves, and folder changes.
+                string watchFolder = Path.Combine(root, "watched");
+                Directory.CreateDirectory(watchFolder);
+                controller.Store.Settings.WatchFolder = watchFolder;
+                using (var watcher = new CaptureWatch(controller.Store, Dispatcher.CurrentDispatcher))
+                {
+                    string partial = Path.Combine(watchFolder, "partial.png");
+                    File.WriteAllBytes(partial, new byte[0]);
+                    Pump(350);
+                    File.WriteAllBytes(partial, ImageStore.Png(Fixture(640, 480, 4)));
+                    Pump(850);
+                    Check(controller.Store.Items.Any(shot => shot.Path == partial), "Folder watcher retries partially written screenshots");
+                    string oldHash = controller.Store.Items.First(shot => shot.Path == partial).Hash;
+                    File.WriteAllBytes(partial, ImageStore.Png(Fixture(640, 480, 5)));
+                    Pump(700);
+                    Check(controller.Store.Items.First(shot => shot.Path == partial).Hash != oldHash, "Saved editor changes refresh the existing screenshot");
+                    string renamed = Path.Combine(watchFolder, "renamed.png");
+                    File.Move(partial, renamed);
+                    Pump(700);
+                    Check(controller.Store.Items.Any(shot => shot.Path == renamed) && !controller.Store.Items.Any(shot => shot.Path == partial), "Renamed screenshots update without dangling cards");
+                }
+
+                // Render actual native window content using only fixtures.
+                controller.Store.Clear();
+                controller.Store.AddBitmap(Fixture(700, 430, 0));
+                controller.Store.AddBitmap(Fixture(450, 600, 1));
+                controller.Store.AddBitmap(Fixture(650, 410, 2));
+                var display = Forms.Screen.FromPoint(Native.Cursor());
+                IntPtr foreground = Native.GetForegroundWindow();
+                controller.Line.Reveal(display);
+                Pump(1500);
+                Check(Native.GetForegroundWindow() == foreground, "Overlay reveal does not steal foreground focus");
+                var line = controller.Line;
+                var canvas = (Canvas)line.Content;
+                var cards = canvas.Children.OfType<ShotCard>().ToArray();
+                Check(cards.Length == 3, "Live WPF overlay lays out three hung screenshots");
+                Check(cards.All(card => Canvas.GetLeft(card) >= 0 && Canvas.GetTop(card) + card.Height < LineWindow.PanelHeight), "Portrait and landscape cards fit the panel");
+                var center = cards[1].PointToScreen(new Point(cards[1].Width / 2, 55));
+                var blank = line.PointToScreen(new Point(20, 170));
+                IntPtr handle = new WindowInteropHelper(line).Handle;
+                Check(Hit(handle, center) == 1 && Hit(handle, blank) == -1, "Native hit testing accepts cards and passes through empty areas");
+                controller.Busy = false;
+                line.UpdateInteraction(new System.Drawing.Point((int)blank.X, (int)blank.Y));
+                Check((Native.GetWindowLong(handle, Native.GWL_EXSTYLE) & Native.WS_EX_TRANSPARENT) != 0, "Empty areas enable Windows click-through style");
+                line.UpdateInteraction(new System.Drawing.Point((int)center.X, (int)center.Y));
+                Check((Native.GetWindowLong(handle, Native.GWL_EXSTYLE) & Native.WS_EX_TRANSPARENT) == 0, "Photo areas restore mouse input");
+                controller.Busy = true;
+                SaveRender(line, Path.Combine(output, "line-render.png"));
+                SavePreview(line, Path.Combine(output, "preview.png"), controller.Sink.HotkeyText);
+
+                // Button event is the same accessible Click event used by WPF UI Automation.
+                string original = controller.Store.Items.Last().Path;
+                string originalExternal = Path.Combine(root, "original-kept.png");
+                File.Copy(original, originalExternal);
+                controller.Store.Remove(controller.Store.Items.Last(), false);
+                controller.Store.AddFile(originalExternal, true);
+                Pump(150);
+                var lastCard = ((Canvas)line.Content).Children.OfType<ShotCard>().Last();
+                lastCard.Children.OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(File.Exists(originalExternal) && controller.Store.Items.Count == 2, "Photo close button takes down external image without deletion");
+
+                line.Width = 400;
+                Pump(200);
+                var narrowCards = ((Canvas)line.Content).Children.OfType<ShotCard>().ToArray();
+                Check(narrowCards.Length == 1 && Canvas.GetLeft(narrowCards[0]) >= 0, "Narrow displays show recent cards without overflow");
+                line.Reveal(display);
+                Pump(450);
+                SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(1), IntPtr.Zero);
+                Pump(300);
+                Check(!line.Revealed && !line.IsVisible, "Global hotkey message tucks away the line");
+                SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(1), IntPtr.Zero);
+                Pump(450);
+                Check(line.Revealed, "Global hotkey message reveals the line again");
+
+                var full = new Window { WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize,
+                    ShowActivated = false, ShowInTaskbar = false, Width = 400, Height = 200,
+                    Background = Brushes.Black, Title = "Snapline QA fullscreen fixture" };
+                full.Show();
+                var fullHandle = new WindowInteropHelper(full).Handle;
+                var bounds = display.Bounds;
+                Native.SetWindowPos(fullHandle, IntPtr.Zero, bounds.Left, bounds.Top, bounds.Width, bounds.Height, 0x0014);
+                Pump(200);
+                Check(Native.IsFullScreen(fullHandle, bounds), "Fullscreen client geometry is recognized");
+                Native.SetWindowPos(fullHandle, IntPtr.Zero, bounds.Left + 100, bounds.Top + 100, 400, 200, 0x0014);
+                Pump(100);
+                Check(!Native.IsFullScreen(fullHandle, bounds), "Ordinary window geometry is not fullscreen");
+                full.Close();
+
+                controller.Dispose(); controller = null;
+                SmokeExecutable(root);
+                File.WriteAllLines(Path.Combine(output, "test-results.txt"), checks);
+                Console.WriteLine("PASS " + checks.Count + " checks. Output: " + output);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("HRESULT: 0x" + ex.HResult.ToString("X8"));
+                Console.Error.WriteLine(ex);
+                File.WriteAllLines(Path.Combine(output, "test-results.txt"), checks.Concat(new[] { "FAIL " + ex.ToString() }));
+                return 1;
+            }
+            finally
+            {
+                if (controller != null) controller.Dispose();
+                if (clipboardUsed)
+                {
+                    if (clipboardBackup == null) Clipboard.Clear();
+                    else Clipboard.SetDataObject(clipboardBackup, true);
+                }
+                app.Shutdown();
+            }
+        }
+
+        private static DataObject BackupClipboard()
+        {
+            var original = Clipboard.GetDataObject();
+            if (original == null) return null;
+            var backup = new DataObject();
+            foreach (var format in original.GetFormats(false))
+            {
+                try
+                {
+                    object value = original.GetData(format, false);
+                    var stream = value as MemoryStream;
+                    if (stream != null) value = new MemoryStream(stream.ToArray());
+                    if (value != null) backup.SetData(format, value, false);
+                }
+                catch (ExternalException) { }
+            }
+            return backup;
+        }
+
+        private static void Check(bool success, string message)
+        {
+            if (!success) throw new Exception("FAIL: " + message);
+            checks.Add("PASS: " + message);
+            Console.WriteLine("PASS: " + message);
+        }
+
+        private static void Pump(int milliseconds)
+        {
+            var frame = new DispatcherFrame();
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milliseconds) };
+            timer.Tick += delegate { timer.Stop(); frame.Continue = false; };
+            timer.Start();
+            Dispatcher.PushFrame(frame);
+        }
+
+        private static int Hit(IntPtr handle, Point point)
+        {
+            int packed = ((int)point.Y << 16) | ((int)point.X & 0xffff);
+            return SendMessage(handle, 0x0084, IntPtr.Zero, new IntPtr(packed)).ToInt32();
+        }
+
+        private static BitmapSource Fixture(int width, int height, int style)
+        {
+            var drawing = new DrawingVisual();
+            using (var dc = drawing.RenderOpen())
+            {
+                bool dark = style % 3 == 2;
+                dc.DrawRectangle(new SolidColorBrush(dark ? Color.FromRgb(26, 33, 42) : Color.FromRgb(241, 239, 233)), null, new Rect(0, 0, width, height));
+                DrawText(dc, style % 3 == 0 ? "A quiet place" : style % 3 == 1 ? "FIELD NOTES" : "WORK / 026", 28, dark ? Brushes.White : Brushes.Black, 30, 35);
+                if (style % 3 == 1)
+                {
+                    dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(85, 139, 120)), null, new Rect(30, 95, width - 60, height - 125));
+                    dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(228, 207, 142)), null, new Point(width * 0.55, height * 0.4), width * 0.16, width * 0.16);
+                    var mountain = new StreamGeometry();
+                    using (var g = mountain.Open()) { g.BeginFigure(new Point(30, height - 30), true, true); g.LineTo(new Point(width * 0.45, height * 0.48), true, false); g.LineTo(new Point(width - 30, height - 30), true, false); }
+                    dc.DrawGeometry(new SolidColorBrush(Color.FromRgb(36, 73, 67)), null, mountain);
+                }
+                else if (dark)
+                {
+                    for (int i = 0; i < 6; i++) dc.DrawRectangle(new SolidColorBrush(i == 4 ? Color.FromRgb(121, 224, 192) : Color.FromRgb(65, 96, 90)), null,
+                        new Rect(35 + i * (width - 70) / 6.0, height * 0.8 - (i * 17 + 45), (width - 100) / 7.0, i * 17 + 45));
+                }
+                else
+                {
+                    DrawText(dc, "A small collection of things worth keeping.", 14, new SolidColorBrush(Color.FromRgb(110, 116, 115)), 30, 85);
+                    for (int i = 0; i < 6; i++) dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(196, 200, 196)), null, new Rect(30, 130 + i * 25, width - 80 - (i % 3) * 40, 7));
+                }
+            }
+            var target = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            target.Render(drawing); target.Freeze(); return target;
+        }
+
+        private static void DrawText(DrawingContext dc, string text, double size, Brush brush, double x, double y)
+        {
+            dc.DrawText(new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), size, brush, 1.0), new Point(x, y));
+        }
+
+        private static void SaveRender(LineWindow line, string path)
+        {
+            var image = new RenderTargetBitmap((int)Math.Ceiling(line.ActualWidth), (int)Math.Ceiling(line.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            image.Render(line);
+            File.WriteAllBytes(path, ImageStore.Png(image));
+        }
+
+        private static void SmokeExecutable(string root)
+        {
+            string executable = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Snapline.exe");
+            string dataRoot = Path.Combine(root, "executable-smoke");
+            var launch = new ProcessStartInfo(executable, "--data-dir \"" + dataRoot + "\"") {
+                UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden
+            };
+            using (var process = Process.Start(launch))
+            {
+                try
+                {
+                    process.WaitForInputIdle(4000);
+                    Pump(700);
+                    Check(!process.HasExited && Directory.Exists(Path.Combine(dataRoot, "Inbox")), "Released EXE starts with an isolated data directory");
+                    using (var second = Process.Start(launch))
+                    {
+                        Check(second.WaitForExit(4000) && second.ExitCode == 0 && !process.HasExited, "Launching EXE twice reuses the running instance");
+                    }
+                    uint thread = 0;
+                    IntPtr messageWindow = IntPtr.Zero;
+                    while ((messageWindow = FindWindowEx(new IntPtr(-3), messageWindow, null, "Snapline messages")) != IntPtr.Zero)
+                    {
+                        uint owner;
+                        uint candidate = GetWindowThreadProcessId(messageWindow, out owner);
+                        if (owner == process.Id) { thread = candidate; break; }
+                    }
+                    Check(thread != 0 && PostThreadMessage(thread, 0x0012, IntPtr.Zero, IntPtr.Zero) && process.WaitForExit(5000) && process.ExitCode == 0,
+                        "Released EXE shuts down its GUI message loop cleanly");
+                }
+                finally { if (!process.HasExited) process.Kill(); }
+            }
+        }
+
+        private static void SavePreview(LineWindow line, string path, string hotkey)
+        {
+            var visual = new DrawingVisual();
+            const int width = 1200, height = 500;
+            using (var dc = visual.RenderOpen())
+            {
+                dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(22, 28, 35)), null, new Rect(0, 0, width, height));
+                DrawText(dc, "Snapline", 40, Brushes.White, 64, 42);
+                DrawText(dc, "Screenshots, within reach.  /  Windows", 15, new SolidColorBrush(Color.FromRgb(159, 177, 184)), 66, 101);
+                dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(35, 49, 52)), null, new Rect(48, 155, 1104, 280));
+                // Crop the native overlay around its center instead of scaling down photos on wide monitors.
+                dc.PushClip(new RectangleGeometry(new Rect(48, 155, 1104, 280)));
+                dc.DrawRectangle(new VisualBrush(line) { Stretch = Stretch.None, AlignmentX = AlignmentX.Center, AlignmentY = AlignmentY.Top }, null,
+                    new Rect(48 + (1104 - line.ActualWidth) / 2, 169, line.ActualWidth, line.ActualHeight));
+                dc.Pop();
+                DrawText(dc, hotkey + "   /   click to copy · hold to edit · drag to use", 13,
+                    new SolidColorBrush(Color.FromRgb(159, 177, 184)), 66, 461);
+            }
+            var image = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            image.Render(visual);
+            File.WriteAllBytes(path, ImageStore.Png(image));
+        }
+    }
+}
