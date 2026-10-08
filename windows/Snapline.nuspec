@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>jiuyang5354.Snapline.Windows</id>
+    <version>0.0.0</version>
+    <title>Snapline · 截图晾衣绳 Windows 版</title>
+    <authors>Alejandro Buján (Tendedero original author), jiuyang5354 (Windows implementation)</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/jiuyang5354/snapline-windows</projectUrl>
+    <description>Windows screenshot shelf with custom hotkeys, update notifications, pause collection, quick copy and optional startup. Unofficial Windows implementation of Tendedero by Alejandro Buján. Requires Windows 10/11 and .NET Framework 4.8. Run tools/Snapline/Snapline.exe after extracting the full tools/Snapline directory. This package distributes a desktop application.</description>
+    <copyright>Copyright (c) 2026 Alejandro Buján; Copyright (c) 2026 jiuyang5354 (Windows implementation)</copyright>
+    <tags>windows screenshot clipboard desktop snapline</tags>
+    <repository type="git" url="https://github.com/jiuyang5354/snapline-windows" commit="" />
+  </metadata>
+  <files>
+    <file src="PACKAGE-README.md" target="README.md" />
+    <file src="portable/LICENSE" target="LICENSE" />
+    <file src="portable/UPSTREAM-LICENSE.txt" target="UPSTREAM-LICENSE.txt" />
+    <file src="portable/NOTICE.md" target="NOTICE.md" />
+    <file src="portable/Snapline.exe" target="tools/Snapline" />
+    <file src="portable/Snapline.exe.config" target="tools/Snapline" />
+    <file src="portable/README.zh-CN.md" target="tools/Snapline" />
+    <file src="portable/LICENSE" target="tools/Snapline/LICENSE" />
+    <file src="portable/UPSTREAM-LICENSE.txt" target="tools/Snapline" />
+    <file src="portable/NOTICE.md" target="tools/Snapline" />
+    <file src="portable/QA.md" target="tools/Snapline" />
+    <file src="portable/preview.png" target="tools/Snapline" />
+  </files>
+</package>

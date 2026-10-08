@@ -1,0 +1,114 @@
+name: Publish Windows package
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published Release tag (for example v1.2.1)
+        required: true
+        default: v1.2.1
+        type: string
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: nuget-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      PACKAGE_ID: jiuyang5354.Snapline.Windows
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: NuGet/setup-nuget@d105a947828025cd7a980103c35ba2bfae586d0f # v2
+        with:
+          nuget-version: '7.9.0'
+      - name: Download and verify published release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:RELEASE_TAG
+          if ($tag -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Expected a numeric release tag, such as v1.2.1.' }
+          $releaseJson = gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,isDraft,isPrerelease,assets
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read release.' }
+          $release = $releaseJson | ConvertFrom-Json
+          if ($release.isDraft -or $release.tagName -cne $tag) { throw 'Release must be published and match the requested tag.' }
+          $fileName = 'Snapline-Windows-' + $tag + '.zip'
+          $asset = @($release.assets | Where-Object { $_.name -ceq $fileName -and $_.state -eq 'uploaded' })
+          if ($asset.Count -ne 1) { throw 'Expected exactly one uploaded portable ZIP.' }
+          $downloadRoot = Join-Path $env:RUNNER_TEMP ('Snapline-' + $tag)
+          New-Item -ItemType Directory -Force -Path $downloadRoot | Out-Null
+          gh release download $tag --repo $env:GITHUB_REPOSITORY --pattern $fileName --pattern SHA256SUMS.txt --dir $downloadRoot
+          if ($LASTEXITCODE -ne 0) { throw 'Release download failed.' }
+          $portableZip = Join-Path $downloadRoot $fileName
+          $digest = 'sha256:' + (Get-FileHash -LiteralPath $portableZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($digest -cne $asset[0].digest -or (Get-Item -LiteralPath $portableZip).Length -ne $asset[0].size) { throw 'Downloaded ZIP differs from the GitHub release asset.' }
+          $commit = gh api ('repos/' + $env:GITHUB_REPOSITORY + '/commits/' + $tag) --jq .sha
+          if ($LASTEXITCODE -ne 0 -or $commit -cnotmatch '^[0-9a-f]{40}$') { throw 'Could not resolve release source commit.' }
+          $packageVersion = $tag.Substring(1)
+          if ($release.isPrerelease) { $packageVersion += '-preview' }
+          @(
+            ('PORTABLE_ZIP=' + $portableZip)
+            ('CHECKSUM_FILE=' + (Join-Path $downloadRoot 'SHA256SUMS.txt'))
+            ('SOURCE_COMMIT=' + $commit)
+            ('IS_PRERELEASE=' + $release.isPrerelease.ToString())
+            ('PACKAGE_VERSION=' + $packageVersion)
+          ) | Add-Content -LiteralPath $env:GITHUB_ENV
+      - name: Package release files
+        shell: pwsh
+        run: |
+          .\windows\package-nuget.ps1 -PortableZip $env:PORTABLE_ZIP -ChecksumFile $env:CHECKSUM_FILE -ReleaseTag $env:RELEASE_TAG -SourceCommit $env:SOURCE_COMMIT -Prerelease:([bool]::Parse($env:IS_PRERELEASE))
+      - name: Publish and download package for verification
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $config = Join-Path $env:RUNNER_TEMP 'Snapline.nuget.config'
+          '<configuration><packageSources><clear /></packageSources></configuration>' | Set-Content -LiteralPath $config -Encoding utf8
+          try {
+            nuget sources Add -Name GitHub -Source ('https://nuget.pkg.github.com/' + $env:GITHUB_REPOSITORY_OWNER + '/index.json') -Username $env:GITHUB_REPOSITORY_OWNER -Password $env:GH_TOKEN -StorePasswordInClearText -ConfigFile $config -NonInteractive
+            if ($LASTEXITCODE -ne 0) { throw 'NuGet authentication setup failed.' }
+            $packagePath = Join-Path $PWD ('windows/dist/nuget/' + $env:PACKAGE_ID + '.' + $env:PACKAGE_VERSION + '.nupkg')
+            nuget push $packagePath -Source GitHub -ApiKey $env:GH_TOKEN -ConfigFile $config -SkipDuplicate -NonInteractive
+            if ($LASTEXITCODE -ne 0) { throw 'Package publication failed.' }
+            $verifyRoot = Join-Path $env:RUNNER_TEMP 'Snapline-package-verification'
+            nuget install $env:PACKAGE_ID -Version $env:PACKAGE_VERSION -Source GitHub -ConfigFile $config -OutputDirectory $verifyRoot -DirectDownload -NoHttpCache -NonInteractive
+            if ($LASTEXITCODE -ne 0) { throw 'Could not download the published package.' }
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($env:PORTABLE_ZIP)
+            $hasher = [System.Security.Cryptography.SHA256]::Create()
+            try {
+              $files = @($archive.Entries | Where-Object { $_.Name.Length -gt 0 })
+              foreach ($entry in $files) {
+                $stream = $entry.Open()
+                try { $expected = [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '') }
+                finally { $stream.Dispose() }
+                $installedFile = Join-Path $verifyRoot ($env:PACKAGE_ID + '.' + $env:PACKAGE_VERSION + '/tools/Snapline/' + $entry.Name)
+                if ((Get-FileHash -LiteralPath $installedFile -Algorithm SHA256).Hash -cne $expected) { throw ('Published package file differs: ' + $entry.Name) }
+              }
+            } finally { $hasher.Dispose(); $archive.Dispose() }
+            $packageJson = gh api ('users/' + $env:GITHUB_REPOSITORY_OWNER + '/packages/nuget/' + $env:PACKAGE_ID)
+            if ($LASTEXITCODE -ne 0) { throw 'Could not verify package metadata.' }
+            $package = $packageJson | ConvertFrom-Json
+            if ($package.repository.full_name -cne $env:GITHUB_REPOSITORY) { throw 'Package is not linked to the expected repository.' }
+            Write-Output ('Verified ' + $files.Count + ' published portable files. Package URL: ' + $package.html_url + '; visibility: ' + $package.visibility)
+            @(
+              '# Published Windows package'
+              ''
+              ('[' + $env:PACKAGE_ID + ' ' + $env:PACKAGE_VERSION + '](' + $package.html_url + ')')
+              ''
+              ('Verified all ' + $files.Count + ' portable files against the published Release. Visibility: **' + $package.visibility + '**.')
+            ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          } finally {
+            if (Test-Path -LiteralPath $config) { Remove-Item -LiteralPath $config -Force }
+          }
