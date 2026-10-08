@@ -12,11 +12,15 @@ An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# 
 
 ## 下载和运行
 
+- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.1/Snapline-Windows-Setup-v1.2.1.exe)
 - [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.1/Snapline-Windows-v1.2.1.zip)
 - [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.1/Snapline-Windows-Source-v1.2.1.zip)
+- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.1/Snapline-Windows-Installer-Source-v1.2.1.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.1/SHA256SUMS-Setup.txt)
 - [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.2.1)
 
-另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，当前 NuGet 版本为 `1.2.1-preview`，已公开并关联本仓库。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。直接使用程序推荐上面的便携 ZIP。
+**安装版：** 双击 EXE，按中文向导安装。“创建桌面快捷方式”默认勾选，可取消；同时提供开始菜单入口和卸载入口。默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，只安装给当前用户，不需要管理员权限。开机启动默认关闭。卸载保留原来的截图和设置，完整说明见 [安装版指南](windows/INSTALLER.zh-CN.md)。
+
+另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，当前 NuGet 版本为 `1.2.1-preview`，已公开并关联本仓库。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
 
 目标系统为 **Windows 10 / 11，需 .NET Framework 4.8 或更高版本**。解压整个便携包，双击其中的 `Snapline.exe`。程序不需要管理员权限；运行后驻留系统托盘，图标也可能在“隐藏图标”菜单中。
 
@@ -74,6 +78,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\build.ps1
 ```
 
 生成的程序位于 `windows/bin/Snapline.exe`。编译使用系统 .NET Framework C# 编译器，无第三方运行时依赖。如果系统缺少编译器，安装 .NET Framework 4.8 Developer Pack。
+
+制作安装包另需 [NSIS 3.13](https://nsis.sourceforge.io/Download)。从官方 ZIP 解压编译器到 `windows/.tools/`，将已发布的便携 ZIP 放在 `windows/`，运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\package-installer.ps1 -Test`。脚本先校验便携 ZIP，再封装同一程序，输出 EXE、安装器源码 ZIP 与独立摘要；安装器验证结果保存在 `windows/qa/output/installer/installer-results.json`，详见 [安装版指南](windows/INSTALLER.zh-CN.md)。
 
 运行现有验证和打包脚本：
 

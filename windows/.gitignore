@@ -1,4 +1,5 @@
 /bin/
 /dist/
 /qa/output/
+/.tools/
 /*.zip
