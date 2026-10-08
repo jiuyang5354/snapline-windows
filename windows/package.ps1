@@ -50,6 +50,6 @@ $updateFeed = @([ordered]@{
         browser_download_url = 'https://github.com/jiuyang5354/snapline-windows/releases/download/' + $releaseTag + '/' + [System.IO.Path]::GetFileName($portableZip)
     })
 })
-[System.IO.File]::WriteAllText((Join-Path $distributionRoot 'update.json'), (ConvertTo-Json -InputObject $updateFeed -Depth 5), $utf8)
+[System.IO.File]::WriteAllText((Join-Path $distributionRoot 'update.json'), (ConvertTo-Json -InputObject $updateFeed -Depth 5).Replace("`r`n", "`n") + "`n", $utf8)
 Write-Output 'Upload and verify release assets first, then publish dist/update.json as the repository-root update.json.'
 Get-Item -LiteralPath $portableZip, $sourceZip | Select-Object Name,Length

@@ -1,10 +1,10 @@
 # Snapline Windows 验证记录
 
-首次验证：2026-10-07；v1.1.0 自定义快捷键与 v1.2.0 更新 / 便捷功能验证：2026-10-08（Asia/Hong_Kong）。
+首次验证：2026-10-07；v1.1.0 自定义快捷键与 v1.2.1 更新 / 便捷功能验证：2026-10-08（Asia/Hong_Kong）。
 
 ## 结果
 
-发布程序与测试程序均使用 C# 5 / 系统 .NET Framework 编译器构建，零编译警告。自动检查 **90 / 90 通过**，包括原有 40 项、18 项快捷键检查和 32 项更新 / 便捷功能检查。测试源码为 `qa/Tests.cs`，完整结果由 `build.ps1 -Test` 写入 `qa/output/test-results.txt`。更新测试使用隔离的 HTTP 响应；真实联网可在公开版本文件发布后单独运行 `bin/Snapline.Tests.exe --network qa/output/network`，不计入这 90 项。
+发布程序与测试程序均使用 C# 5 / 系统 .NET Framework 编译器构建，零编译警告。自动检查 **91 / 91 通过**，包括原有 40 项、18 项快捷键检查和 33 项更新 / 便捷功能检查。测试源码为 `qa/Tests.cs`，完整结果由 `build.ps1 -Test` 写入 `qa/output/test-results.txt`。更新测试使用隔离的 HTTP 响应；真实联网可在公开版本文件发布后单独运行 `bin/Snapline.Tests.exe --network qa/output/network`，不计入这 91 项。
 
 执行环境为本机 Windows x64，系统版本 `10.0.26200.0`，.NET Framework 注册表 Release 值 `533509`。目标为 Windows 10 / 11 + .NET Framework 4.8 或更高；本次没有在独立 Windows 10 机器或 32 位系统上测试。
 
@@ -45,6 +45,8 @@
 `qa/output/tray-menu.png` 和 `qa/output/update-dialog.png` 是实际 WinForms 控件渲染。更新窗口中的 v1.4.0 为生成的测试版本，供验证比较和对话框使用，不是实际发布版本。
 
 本机匿名访问 GitHub REST Releases API 返回限流 403，公开 raw 文件与 release ZIP 均返回 200，因此更新检查读取仓库公开的 `update.json`，无需账号令牌。发布包的 SHA-256 来源与 GitHub 上传文件摘要一致；[GitHub 发布摘要说明](https://github.blog/changelog/2025-06-03-releases-now-expose-digests-for-release-assets/)。
+
+v1.2.0 的真实 .NET HTTP 检查暴露了目标框架标识缺失造成的 HTTPS 握手失败。v1.2.1 明确标记 .NET Framework 4.8 并在程序配置中启用系统默认 TLS 与强加密，按 [Microsoft TLS 指南](https://learn.microsoft.com/en-us/dotnet/framework/network-programming/tls) 由操作系统选择协议。发布前已用同一份修正后源码实际读取公开 README（HTTP 200），并下载已发布的 v1.2.0 ZIP、完成大小与 SHA-256 校验；不修改系统 TLS 注册表、不跳过证书校验。回归检查同时验证目标框架和 SystemDefault 状态。
 
 ## 尚需人工检查的范围
 

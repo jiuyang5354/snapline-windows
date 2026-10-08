@@ -4,7 +4,7 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的**非�
 
 An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# / WPF and Win32. This project uses its own name and icon and is not endorsed by the upstream author.
 
-**当前版本为 v1.2.0 预发布，新增更新提醒、校验下载、暂停收集、快速复制和可选开机启动。** 自动检查 90 / 90 通过；不同物理显示器的缩放、真实鼠标手势、具体软件的拖放接收和全屏应用体验仍需人工检查。请阅读 [验证记录](windows/QA.md)。
+**当前版本为 v1.2.1 预发布，新增更新提醒、校验下载、暂停收集、快速复制和可选开机启动。** 自动检查 91 / 91 通过；不同物理显示器的缩放、真实鼠标手势、具体软件的拖放接收和全屏应用体验仍需人工检查。请阅读 [验证记录](windows/QA.md)。
 
 ![Snapline Windows 窗口预览](docs/preview.png)
 
@@ -12,9 +12,9 @@ An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# 
 
 ## 下载和运行
 
-- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.0/Snapline-Windows-v1.2.0.zip)
-- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.0/Snapline-Windows-Source-v1.2.0.zip)
-- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.2.0)
+- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.1/Snapline-Windows-v1.2.1.zip)
+- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.1/Snapline-Windows-Source-v1.2.1.zip)
+- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.2.1)
 
 目标系统为 **Windows 10 / 11，需 .NET Framework 4.8 或更高版本**。解压整个便携包，双击其中的 `Snapline.exe`。程序不需要管理员权限；运行后驻留系统托盘，图标也可能在“隐藏图标”菜单中。
 
@@ -49,7 +49,7 @@ An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# 
 | 复制最近一张 | 无须展开晾衣绳，直接复制当前列表最近一张图片；没有图片时禁用。 |
 | 开机启动 | 默认关闭，仅在勾选后设置当前 Windows 用户登录时启动，不需要管理员权限。移动或重新解压程序后请重新勾选，以更新路径。 |
 
-**v1.0 / v1.1 用户需要先手动下载一次 v1.2.0。** 下载后从托盘退出旧版，解压整个新版文件夹并运行 `Snapline.exe`。之后即可收到更新提醒；截图、列表及自定义快捷键保存在原来的数据目录，会继续使用。当前提供自动检查、提醒和点击下载，安装更新需退出旧版并解压运行。
+**旧版用户需要先手动下载一次 v1.2.1。** 下载后从托盘退出旧版，解压整个新版文件夹并运行 `Snapline.exe`。之后即可收到更新提醒；截图、列表及自定义快捷键保存在原来的数据目录，会继续使用。当前提供自动检查、提醒和点击下载，安装更新需退出旧版并解压运行。
 
 更新仅读取本仓库公开的版本文件，并在点击下载时访问 GitHub 发布包。程序校验包的大小与 SHA-256，下载取消、失败或校验不通过时不会替换已保存的包。离线检查静默失败，手动检查会提示；不需要登录 GitHub。
 

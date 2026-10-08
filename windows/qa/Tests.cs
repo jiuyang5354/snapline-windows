@@ -316,6 +316,9 @@ namespace Snapline
 
         private static void CheckUpdates(string root, string output)
         {
+            Check(System.Net.ServicePointManager.SecurityProtocol == System.Net.SecurityProtocolType.SystemDefault &&
+                AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName == ".NETFramework,Version=v4.8",
+                "The executable targets .NET Framework 4.8 and negotiates HTTPS using operating-system TLS defaults");
             var package = Encoding.UTF8.GetBytes("PK generated update package fixture");
             string stable = ReleaseJson("v1.3.0", package, false, false);
             string preview = ReleaseJson("v1.4.0", package, false, true);
