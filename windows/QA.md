@@ -48,6 +48,8 @@
 
 v1.2.0 的真实 .NET HTTP 检查暴露了目标框架标识缺失造成的 HTTPS 握手失败。v1.2.1 明确标记 .NET Framework 4.8 并在程序配置中启用系统默认 TLS 与强加密，按 [Microsoft TLS 指南](https://learn.microsoft.com/en-us/dotnet/framework/network-programming/tls) 由操作系统选择协议。发布前已用同一份修正后源码实际读取公开 README（HTTP 200），并下载已发布的 v1.2.0 ZIP、完成大小与 SHA-256 校验；不修改系统 TLS 注册表、不跳过证书校验。回归检查同时验证目标框架和 SystemDefault 状态。
 
+2026-10-08 发布 v1.2.1 及版本文件后，另外执行真实匿名联网检查 **4 / 4 通过**：公开版本文件读取、程序自身版本比较、实际 GitHub ZIP 下载与 SHA-256 校验、下载临时文件清理。记录位于 `qa/output/network-v1.2.1/network-results.txt`。GitHub 上的便携包、源码包及校验文件均已下载回本地，与发布前文件逐一比较 SHA-256 一致。便携包共 8 个文件、源码包共 27 个文件，打包时已与对应源码 / 已测试 EXE 逐文件核对。
+
 ## 尚需人工检查的范围
 
 下列功能已经实现，但本次没有声称完成端到端人工验证：
