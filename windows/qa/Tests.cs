@@ -172,10 +172,10 @@ namespace Snapline
                 Check(narrowCards.Length == 1 && Canvas.GetLeft(narrowCards[0]) >= 0, "Narrow displays show recent cards without overflow");
                 line.Reveal(display);
                 Pump(450);
-                SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(1), IntPtr.Zero);
+                SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(controller.Sink.HotkeyId), IntPtr.Zero);
                 Pump(300);
                 Check(!line.Revealed && !line.IsVisible, "Global hotkey message tucks away the line");
-                SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(1), IntPtr.Zero);
+                SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(controller.Sink.HotkeyId), IntPtr.Zero);
                 Pump(450);
                 Check(line.Revealed, "Global hotkey message reveals the line again");
 
@@ -193,7 +193,14 @@ namespace Snapline
                 Check(!Native.IsFullScreen(fullHandle, bounds), "Ordinary window geometry is not fullscreen");
                 full.Close();
 
+                CheckHotkeys(controller, root, output);
                 controller.Dispose(); controller = null;
+                using (var restarted = new Controller(Path.Combine(root, "live"), false))
+                {
+                    var saved = new ImageStore(Path.Combine(root, "live")).Settings;
+                    Check(restarted.Sink.HotkeyRegistered && restarted.Sink.HotkeyKey == saved.HotkeyKey &&
+                        restarted.Sink.HotkeyModifiers == saved.HotkeyModifiers, "Custom shortcut is registered again after restart");
+                }
                 SmokeExecutable(root);
                 File.WriteAllLines(Path.Combine(output, "test-results.txt"), checks);
                 Console.WriteLine("PASS " + checks.Count + " checks. Output: " + output);
@@ -216,6 +223,121 @@ namespace Snapline
                 }
                 app.Shutdown();
             }
+        }
+
+        private static uint FreeHotkey(uint modifiers)
+        {
+            for (uint key = 0x75; key <= 0x7a; key++)
+                if (Native.RegisterHotKey(IntPtr.Zero, 90, modifiers | 0x4000, key))
+                {
+                    Native.UnregisterHotKey(IntPtr.Zero, 90);
+                    return key;
+                }
+            throw new Exception("No test shortcut is available.");
+        }
+
+        private static void CheckHotkeys(Controller controller, string root, string output)
+        {
+            controller.Busy = true;
+            string legacyRoot = Path.Combine(root, "legacy-settings");
+            Directory.CreateDirectory(legacyRoot);
+            File.WriteAllText(Path.Combine(legacyRoot, "settings.json"), "{\"ListenClipboard\":false,\"Paths\":[]}");
+            var legacy = new ImageStore(legacyRoot).Settings;
+            Check(legacy.HotkeyKey == Hotkey.DefaultKey && legacy.HotkeyModifiers == Hotkey.DefaultModifiers && !legacy.ListenClipboard,
+                "Older settings gain the default shortcut without changing clipboard preferences");
+            Check(Hotkey.Modifiers(Forms.Keys.Control | Forms.Keys.Alt | Forms.Keys.Shift | Forms.Keys.H, true) == 15,
+                "Recording includes Ctrl, Alt, Shift and Win modifiers");
+
+            uint oldKey = controller.Sink.HotkeyKey, oldModifiers = controller.Sink.HotkeyModifiers;
+            int oldId = controller.Sink.HotkeyId;
+            uint custom = FreeHotkey(7);
+            string error;
+            Check(controller.ChangeHotkey(custom, 7, out error) && controller.Sink.HotkeyRegistered,
+                "A custom combination applies without restarting the app");
+            bool released = Native.RegisterHotKey(IntPtr.Zero, 90, oldModifiers | 0x4000, oldKey);
+            if (released) Native.UnregisterHotKey(IntPtr.Zero, 90);
+            Check(released, "Changing the shortcut releases the previous native registration");
+            controller.Line.Tuck();
+            SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(oldId), IntPtr.Zero);
+            Check(!controller.Line.Revealed, "Queued messages for the old shortcut no longer toggle the line");
+            SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(controller.Sink.HotkeyId), IntPtr.Zero);
+            Check(controller.Line.Revealed, "The replacement native hotkey message still toggles the line");
+            var saved = new ImageStore(controller.Store.Root).Settings;
+            Check(saved.HotkeyKey == custom && saved.HotkeyModifiers == 7, "Custom shortcut is persisted to settings.json");
+
+            uint occupied = FreeHotkey(7);
+            Check(Native.RegisterHotKey(IntPtr.Zero, 90, 0x4007, occupied), "A separate registration creates a real shortcut conflict");
+            try
+            {
+                Check(!controller.ChangeHotkey(occupied, 7, out error) && error != null && controller.Sink.HotkeyRegistered &&
+                    controller.Sink.HotkeyKey == custom && controller.Store.Settings.HotkeyKey == custom,
+                    "Conflicting bindings preserve the active shortcut and saved settings");
+            }
+            finally { Native.UnregisterHotKey(IntPtr.Zero, 90); }
+            Check(!controller.ChangeHotkey(0x7b, 0, out error) && error.Contains("F12") &&
+                !controller.ChangeHotkey(0x10, 0, out error) && controller.Sink.HotkeyKey == custom,
+                "Reserved F12 and modifier-only bindings are rejected without changing the shortcut");
+            using (var locked = new FileStream(Path.Combine(controller.Store.Root, "settings.json.tmp"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+                Check(!controller.ChangeHotkey(FreeHotkey(7), 7, out error) && controller.Sink.HotkeyRegistered &&
+                    controller.Sink.HotkeyKey == custom && controller.Sink.HotkeyModifiers == 7 && controller.Store.Settings.HotkeyKey == custom,
+                    "A settings write failure restores the prior native binding and preferences");
+
+            uint single = FreeHotkey(0);
+            DialogAction(controller, delegate(HotkeyDialog dialog) {
+                var input = dialog.Controls.OfType<HotkeyInput>().Single();
+                bool revealed = controller.Line.Revealed;
+                SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(controller.Sink.HotkeyId), IntPtr.Zero);
+                Check(input.Text == controller.Sink.HotkeyText && controller.Line.Revealed == revealed,
+                    "The existing global shortcut can be recorded without toggling the overlay");
+                input.Focus();
+                SendMessage(input.Handle, 0x0100, new IntPtr(single), IntPtr.Zero);
+                Check(input.Text == Hotkey.Text(single, 0) && dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "保存").Enabled,
+                    "The native shortcut input records a single key and enables Save");
+                using (var image = new System.Drawing.Bitmap(dialog.Width, dialog.Height))
+                {
+                    dialog.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, dialog.Width, dialog.Height));
+                    image.Save(Path.Combine(output, "hotkey-dialog.png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+                dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "保存").PerformClick();
+            });
+            Check(controller.Sink.HotkeyKey == single && controller.Sink.HotkeyModifiers == 0 &&
+                new ImageStore(controller.Store.Root).Settings.HotkeyKey == single,
+                "Saving from the actual dialog applies and persists a single-key binding");
+            var tray = (Forms.NotifyIcon)typeof(Controller).GetField("tray", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(controller);
+            Check(tray.ContextMenuStrip.Items.OfType<Forms.ToolStripMenuItem>().First().Text.Contains(Hotkey.Text(single, 0)),
+                "The tray menu updates to display the custom shortcut");
+            DialogAction(controller, delegate(HotkeyDialog dialog) {
+                SendMessage(dialog.Controls.OfType<HotkeyInput>().Single().Handle, 0x0100, new IntPtr(FreeHotkey(0)), IntPtr.Zero);
+                dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "取消").PerformClick();
+            });
+            Check(controller.Sink.HotkeyKey == single && new ImageStore(controller.Store.Root).Settings.HotkeyKey == single,
+                "Canceling a recorded shortcut preserves the active and saved binding");
+            DialogAction(controller, delegate(HotkeyDialog dialog) {
+                dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "恢复默认").PerformClick();
+                Check(dialog.Controls.OfType<HotkeyInput>().Single().Text == Hotkey.Text(Hotkey.DefaultKey, Hotkey.DefaultModifiers),
+                    "Restore Default selects Ctrl + Alt + T in the dialog");
+                dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "取消").PerformClick();
+            });
+        }
+
+        private static void DialogAction(Controller controller, Action<HotkeyDialog> action)
+        {
+            Exception failure = null;
+            using (var timer = new Forms.Timer { Interval = 150 })
+            {
+                timer.Tick += delegate {
+                    var dialog = Forms.Application.OpenForms.OfType<HotkeyDialog>().FirstOrDefault();
+                    if (dialog == null) return;
+                    timer.Stop();
+                    try { action(dialog); }
+                    catch (Exception ex) { failure = ex; }
+                    finally { dialog.Close(); }
+                };
+                timer.Start();
+                controller.ShowHotkeySettings();
+            }
+            controller.Busy = true;
+            if (failure != null) throw failure;
         }
 
         private static DataObject BackupClipboard()

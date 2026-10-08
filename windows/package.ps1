@@ -30,8 +30,8 @@ foreach ($repositoryFile in @('README.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'N
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'docs') | Out-Null
 Copy-Item -LiteralPath (Join-Path (Split-Path $projectRoot -Parent) 'docs\preview.png') -Destination (Join-Path $sourceRoot 'docs\preview.png')
-$portableZip = Join-Path $projectRoot 'Snapline-Windows-v1.0.0.zip'
-$sourceZip = Join-Path $projectRoot 'Snapline-Windows-Source-v1.0.0.zip'
+$portableZip = Join-Path $projectRoot 'Snapline-Windows-v1.1.0.zip'
+$sourceZip = Join-Path $projectRoot 'Snapline-Windows-Source-v1.1.0.zip'
 Compress-Archive -LiteralPath $portableRoot -DestinationPath $portableZip -Force
 Compress-Archive -LiteralPath $sourceRoot -DestinationPath $sourceZip -Force
 Get-Item -LiteralPath $portableZip, $sourceZip | Select-Object Name,Length

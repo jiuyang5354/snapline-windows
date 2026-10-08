@@ -4,7 +4,7 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的**非�
 
 An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# / WPF and Win32. This project uses its own name and icon and is not endorsed by the upstream author.
 
-**当前版本为 v1.0.0 预发布。** 发布前自动检查 40 / 40 通过；不同物理显示器的缩放、真实鼠标手势、具体软件的拖放接收和全屏应用体验仍需人工检查。请阅读 [验证记录](windows/QA.md)。
+**当前版本为 v1.1.0 预发布，新增自定义快捷键。** 发布前自动检查 58 / 58 通过；不同物理显示器的缩放、真实鼠标手势、具体软件的拖放接收和全屏应用体验仍需人工检查。请阅读 [验证记录](windows/QA.md)。
 
 ![Snapline Windows 窗口预览](docs/preview.png)
 
@@ -12,9 +12,9 @@ An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# 
 
 ## 下载和运行
 
-- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.0.0/Snapline-Windows-v1.0.0.zip)
-- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.0.0/Snapline-Windows-Source-v1.0.0.zip)
-- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.0.0)
+- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.1.0/Snapline-Windows-v1.1.0.zip)
+- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.1.0/Snapline-Windows-Source-v1.1.0.zip)
+- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.1.0)
 
 目标系统为 **Windows 10 / 11，需 .NET Framework 4.8 或更高版本**。解压整个便携包，双击其中的 `Snapline.exe`。程序不需要管理员权限；运行后驻留系统托盘，图标也可能在“隐藏图标”菜单中。
 
@@ -28,6 +28,14 @@ An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# 
 4. 从托盘右键菜单选择“退出”关闭程序。
 
 如果 `Ctrl + Alt + T` 已被占用，程序会尝试 `Ctrl + Alt + Shift + T`；两个组合键都被占用时，仍可通过托盘和顶部悬停操作。完整操作说明见 [中文使用指南](windows/README.zh-CN.md)。
+
+## 自定义快捷键
+
+右键系统托盘中的 Snapline 图标 → **设置快捷键…** → 在输入框按下想绑定的按键 → **保存**。新快捷键用于显示 / 隐藏晾衣绳，保存后立即生效，重启后继续使用。
+
+支持普通单键、功能键，以及 Ctrl / Alt / Shift / Win 与一个普通按键的组合，例如 `F8`、`Ctrl + Shift + Space`。可点击输入框重新录入，或选择“恢复默认”后保存；取消会保留原绑定。
+
+单键会占用其他应用中的同名按键；绑定字母或数字时建议使用组合键。修饰键须搭配普通按键，F12 为系统保留键。已被占用或无法注册的组合会提示原因并保留原快捷键。如果重启时保存的组合被其他软件占用，程序会提示并尝试默认和备用组合，保存的偏好仍保留。
 
 ## 使用注意事项
 

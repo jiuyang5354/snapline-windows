@@ -16,6 +16,15 @@ namespace Snapline
         [DataMember] public bool ListenClipboard = true;
         [DataMember] public string WatchFolder = Native.ScreenshotsFolder();
         [DataMember] public List<string> Paths = new List<string>();
+        [DataMember] public uint HotkeyKey = Hotkey.DefaultKey;
+        [DataMember] public uint HotkeyModifiers = Hotkey.DefaultModifiers;
+
+        [OnDeserializing]
+        private void HotkeyDefaults(StreamingContext context)
+        {
+            HotkeyKey = Hotkey.DefaultKey;
+            HotkeyModifiers = Hotkey.DefaultModifiers;
+        }
     }
 
     internal sealed class Shot

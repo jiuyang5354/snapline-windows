@@ -98,6 +98,39 @@ namespace Snapline
         }
     }
 
+    internal static class Hotkey
+    {
+        internal const uint DefaultKey = 0x54;
+        internal const uint DefaultModifiers = 3;
+
+        internal static bool IsModifier(uint key)
+        {
+            return (key >= 0x10 && key <= 0x12) || key == 0x5b || key == 0x5c || (key >= 0xa0 && key <= 0xa5);
+        }
+
+        internal static string Validate(uint key, uint modifiers)
+        {
+            if (key < 8 || key > 254 || IsModifier(key) || (modifiers & ~15u) != 0)
+                return "请按下一个普通按键，可配合 Ctrl、Alt、Shift 或 Win。";
+            if (key == 0x7b) return "F12 是 Windows 保留键，请选择其他按键。";
+            return null;
+        }
+
+        internal static uint Modifiers(Forms.Keys keyData, bool windows)
+        {
+            return ((keyData & Forms.Keys.Control) != 0 ? 2u : 0u) |
+                ((keyData & Forms.Keys.Alt) != 0 ? 1u : 0u) |
+                ((keyData & Forms.Keys.Shift) != 0 ? 4u : 0u) | (windows ? 8u : 0u);
+        }
+
+        internal static string Text(uint key, uint modifiers)
+        {
+            string text = ((modifiers & 2) != 0 ? "Ctrl + " : "") + ((modifiers & 1) != 0 ? "Alt + " : "") +
+                ((modifiers & 4) != 0 ? "Shift + " : "") + ((modifiers & 8) != 0 ? "Win + " : "");
+            return text + new Forms.KeysConverter().ConvertToString((Forms.Keys)key);
+        }
+    }
+
     internal sealed class MessageSink : IDisposable
     {
         private readonly HwndSource source;
@@ -105,42 +138,67 @@ namespace Snapline
         internal event Action ToggleRequested;
         internal bool HotkeyRegistered { get; private set; }
         internal int HotkeyError { get; private set; }
-        internal string HotkeyText { get; private set; }
+        internal uint HotkeyKey { get; private set; }
+        internal uint HotkeyModifiers { get; private set; }
+        internal int HotkeyId { get; private set; }
+        internal string HotkeyText { get { return Hotkey.Text(HotkeyKey, HotkeyModifiers); } }
         internal bool ClipboardRegistered { get; private set; }
         internal IntPtr Handle { get { return source.Handle; } }
 
-        internal MessageSink()
+        internal MessageSink(uint key, uint modifiers)
         {
             source = new HwndSource(new HwndSourceParameters("Snapline messages") {
                 ParentWindow = new IntPtr(-3), Width = 0, Height = 0, WindowStyle = 0
             });
             source.AddHook(Hook);
             ClipboardRegistered = Native.AddClipboardFormatListener(source.Handle);
-            HotkeyText = "Ctrl + Alt + T";
-            HotkeyRegistered = Native.RegisterHotKey(source.Handle, 1, 0x4003, 0x54);
-            if (!HotkeyRegistered)
+            HotkeyKey = Hotkey.DefaultKey;
+            HotkeyModifiers = Hotkey.DefaultModifiers;
+            string error;
+            if (!TrySetHotkey(key, modifiers, out error) && (key != Hotkey.DefaultKey || modifiers != Hotkey.DefaultModifiers))
+                TrySetHotkey(Hotkey.DefaultKey, Hotkey.DefaultModifiers, out error);
+            if (!HotkeyRegistered && HotkeyError == 1409) TrySetHotkey(Hotkey.DefaultKey, 7, out error);
+        }
+
+        internal bool TrySetHotkey(uint key, uint modifiers, out string error)
+        {
+            error = Hotkey.Validate(key, modifiers);
+            if (error != null) return false;
+            if (HotkeyRegistered && key == HotkeyKey && modifiers == HotkeyModifiers) return true;
+            int nextId = HotkeyId == 1 ? 2 : 1;
+            if (!Native.RegisterHotKey(source.Handle, nextId, modifiers | 0x4000, key))
             {
                 HotkeyError = Marshal.GetLastWin32Error();
-                if (HotkeyError == 1409)
-                {
-                    HotkeyText = "Ctrl + Alt + Shift + T";
-                    HotkeyRegistered = Native.RegisterHotKey(source.Handle, 1, 0x4007, 0x54);
-                    if (!HotkeyRegistered) HotkeyError = Marshal.GetLastWin32Error();
-                }
+                error = "这个按键已被占用或被 Windows 保留，请换一个按键组合。";
+                return false;
             }
+            // Reserve the replacement before releasing the current binding.
+            ClearHotkey();
+            HotkeyId = nextId;
+            HotkeyKey = key;
+            HotkeyModifiers = modifiers;
+            HotkeyRegistered = true;
+            HotkeyError = 0;
+            return true;
+        }
+
+        internal void ClearHotkey()
+        {
+            if (HotkeyRegistered) Native.UnregisterHotKey(source.Handle, HotkeyId);
+            HotkeyRegistered = false;
         }
 
         private IntPtr Hook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
             if (message == Native.WM_CLIPBOARDUPDATE && ClipboardChanged != null) ClipboardChanged();
-            if (message == Native.WM_HOTKEY && wParam.ToInt32() == 1 && ToggleRequested != null) ToggleRequested();
+            if (message == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId && HotkeyRegistered && ToggleRequested != null) ToggleRequested();
             return IntPtr.Zero;
         }
 
         public void Dispose()
         {
             Native.RemoveClipboardFormatListener(source.Handle);
-            if (HotkeyRegistered) Native.UnregisterHotKey(source.Handle, 1);
+            ClearHotkey();
             source.Dispose();
         }
     }

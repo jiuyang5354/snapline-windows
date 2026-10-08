@@ -33,18 +33,21 @@ namespace Snapline
         private uint lastSequence;
         private bool disposed;
         private readonly Forms.ToolStripMenuItem clipboardMenu;
+        private readonly Forms.ToolStripMenuItem toggleMenu;
+        private HotkeyDialog hotkeyDialog;
 
         internal Controller(string root, bool watchFiles)
         {
             dispatcher = Dispatcher.CurrentDispatcher;
             Store = new ImageStore(root);
             Line = new LineWindow(this);
-            Sink = new MessageSink();
+            Sink = new MessageSink(Store.Settings.HotkeyKey, Store.Settings.HotkeyModifiers);
             Store.Changed += delegate { Line.Rebuild(); };
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Snapline.ico")) icon = new Icon(stream);
             tray = new Forms.NotifyIcon { Icon = icon, Text = "Snapline · 截图晾衣绳", Visible = true };
             var menu = new Forms.ContextMenuStrip();
-            Add(menu, "显示 / 隐藏    " + (Sink.HotkeyRegistered ? Sink.HotkeyText : "点击托盘图标"), Toggle);
+            toggleMenu = Add(menu, "显示 / 隐藏    " + (Sink.HotkeyRegistered ? Sink.HotkeyText : "点击托盘图标"), Toggle);
+            Add(menu, "设置快捷键…", ShowHotkeySettings);
             Add(menu, "挂入图片…", Import);
             menu.Items.Add(new Forms.ToolStripSeparator());
             clipboardMenu = new Forms.ToolStripMenuItem("收集剪贴板图片") { Checked = Store.Settings.ListenClipboard, CheckOnClick = true };
@@ -62,7 +65,10 @@ namespace Snapline
             tray.MouseClick += delegate(object sender, Forms.MouseEventArgs e) { if (e.Button == Forms.MouseButtons.Left) Toggle(); };
             lastSequence = Native.GetClipboardSequenceNumber();
             Sink.ClipboardChanged += delegate { uint sequence = Native.GetClipboardSequenceNumber(); dispatcher.BeginInvoke(new Action(delegate { CaptureClipboard(sequence, 0); })); };
-            Sink.ToggleRequested += Toggle;
+            Sink.ToggleRequested += delegate {
+                if (hotkeyDialog != null) hotkeyDialog.CaptureCurrent(Sink.HotkeyKey, Sink.HotkeyModifiers);
+                else Toggle();
+            };
             if (watchFiles)
             {
                 watch = new CaptureWatch(Store, dispatcher);
@@ -76,8 +82,9 @@ namespace Snapline
 
         internal void Welcome()
         {
-            if (!Sink.HotkeyRegistered) Notify("Ctrl + Alt + T 已被其他程序占用。仍可点击托盘图标或靠近屏幕顶端展开。");
-            else if (Sink.HotkeyText != "Ctrl + Alt + T") Notify("Ctrl + Alt + T 已被占用，本次使用 " + Sink.HotkeyText + " 展开 / 收起。");
+            if (!Sink.HotkeyRegistered) Notify("快捷键无法注册。可在托盘设置其他快捷键，或点击托盘图标、靠近屏幕顶端展开。");
+            else if (Sink.HotkeyKey != Store.Settings.HotkeyKey || Sink.HotkeyModifiers != Store.Settings.HotkeyModifiers)
+                Notify("保存的快捷键无法注册，本次使用 " + Sink.HotkeyText + " 展开 / 收起。可从托盘重新设置。");
             if (!Sink.ClipboardRegistered) Notify("剪贴板监听注册失败。仍可从托盘挂入图片或监听截图文件夹。");
             if (Store.Items.Count == 0)
             {
@@ -86,11 +93,12 @@ namespace Snapline
             }
         }
 
-        private static void Add(Forms.ContextMenuStrip menu, string text, Action action)
+        private static Forms.ToolStripMenuItem Add(Forms.ContextMenuStrip menu, string text, Action action)
         {
             var item = new Forms.ToolStripMenuItem(text);
             item.Click += delegate { action(); };
             menu.Items.Add(item);
+            return item;
         }
 
         internal void Notify(string message) { if (!disposed) tray.ShowBalloonTip(5000, "Snapline", message, Forms.ToolTipIcon.Warning); }
@@ -293,10 +301,47 @@ namespace Snapline
             finally { Busy = false; }
         }
 
+        internal bool ChangeHotkey(uint key, uint modifiers, out string error)
+        {
+            uint oldKey = Sink.HotkeyKey, oldModifiers = Sink.HotkeyModifiers;
+            uint savedKey = Store.Settings.HotkeyKey, savedModifiers = Store.Settings.HotkeyModifiers;
+            bool wasRegistered = Sink.HotkeyRegistered;
+            if (!Sink.TrySetHotkey(key, modifiers, out error)) return false;
+            Store.Settings.HotkeyKey = key;
+            Store.Settings.HotkeyModifiers = modifiers;
+            try { Store.Save(); }
+            catch (Exception ex)
+            {
+                if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw;
+                Store.Settings.HotkeyKey = savedKey;
+                Store.Settings.HotkeyModifiers = savedModifiers;
+                string restoreError;
+                if (wasRegistered) Sink.TrySetHotkey(oldKey, oldModifiers, out restoreError);
+                else Sink.ClearHotkey();
+                error = "无法保存快捷键设置，请检查数据文件夹是否可写后再试。";
+                return false;
+            }
+            toggleMenu.Text = "显示 / 隐藏    " + Sink.HotkeyText;
+            return true;
+        }
+
+        internal void ShowHotkeySettings()
+        {
+            Busy = true;
+            try
+            {
+                using (hotkeyDialog = new HotkeyDialog(Sink.HotkeyKey, Sink.HotkeyModifiers, delegate(uint key, uint modifiers) {
+                    string error;
+                    return ChangeHotkey(key, modifiers, out error) ? null : error;
+                })) hotkeyDialog.ShowDialog();
+            }
+            finally { hotkeyDialog = null; Busy = false; }
+        }
+
         private void Help()
         {
             Busy = true;
-            try { MessageBox.Show("Win + Shift + S 或 PrintScreen 截图后，图片自动挂入。\n收集剪贴板图片也会收集从其他应用复制的图片，可在托盘菜单关闭。\n\n鼠标在屏幕顶端停留，或 " + Sink.HotkeyText + "：展开 / 收起。\n单击：复制图片。双击：用默认图片应用打开。\n长按 0.45 秒：用画图编辑，保存后刷新缩略图。\n拖入应用：发送图片或文件副本。\n拖入文件夹：由目标应用决定复制或移动；Shift 拖动可请求移动。\n右键：另存为、在文件夹中显示或取下。\n\n叉号：收件夹里的图片进入回收站；外部原文件保留。\n最多保留 12 张，屏幕较窄时显示最近几张；旧文件仍在收件夹。\n\nSnapline 1.0 · Windows 非官方移植版\n基于 Alejandro Buján 的 Tendedero 交互与 MIT 代码。", "Snapline · 使用说明", MessageBoxButton.OK, MessageBoxImage.Information); }
+            try { MessageBox.Show("Win + Shift + S 或 PrintScreen 截图后，图片自动挂入。\n收集剪贴板图片也会收集从其他应用复制的图片，可在托盘菜单关闭。\n\n鼠标在屏幕顶端停留，或 " + Sink.HotkeyText + "：展开 / 收起。\n右键托盘 → 设置快捷键：录入单键或组合键，保存后立即生效。\n单击：复制图片。双击：用默认图片应用打开。\n长按 0.45 秒：用画图编辑，保存后刷新缩略图。\n拖入应用：发送图片或文件副本。\n拖入文件夹：由目标应用决定复制或移动；Shift 拖动可请求移动。\n右键：另存为、在文件夹中显示或取下。\n\n叉号：收件夹里的图片进入回收站；外部原文件保留。\n最多保留 12 张，屏幕较窄时显示最近几张；旧文件仍在收件夹。\n\nSnapline 1.1 · Windows 非官方移植版\n基于 Alejandro Buján 的 Tendedero 交互与 MIT 代码。", "Snapline · 使用说明", MessageBoxButton.OK, MessageBoxImage.Information); }
             finally { Busy = false; }
         }
 

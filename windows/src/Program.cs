@@ -8,7 +8,7 @@ using System.Windows;
 
 [assembly: AssemblyTitle("Snapline")]
 [assembly: AssemblyDescription("Screenshots on a line · Windows")]
-[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
 
 namespace Snapline
 {
