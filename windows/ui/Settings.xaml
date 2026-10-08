@@ -1,0 +1,134 @@
+<Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Name="Settings" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" TextElement.FontFamily="Microsoft YaHei UI" TextElement.FontSize="13" TextElement.Foreground="{DynamicResource Ink}" UseLayoutRounding="True">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="42" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="60" />
+    </Grid.RowDefinitions>
+    <Grid Margin="18,0,8,0">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock Text="Snapline" FontFamily="Segoe UI" FontWeight="SemiBold" />
+        <TextBlock Text=" / 设置" Foreground="{DynamicResource Muted}" />
+      </StackPanel>
+      <Button x:Name="CloseSettings" HorizontalAlignment="Right" Content="" FontFamily="Segoe MDL2 Assets" Style="{StaticResource Bare}" Padding="12,7" ToolTip="关闭设置" />
+    </Grid>
+    <Border Grid.Row="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,1">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="153" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border Background="{DynamicResource Tint}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
+          <Grid>
+            <StackPanel Margin="0,18,0,0">
+              <RadioButton x:Name="NavGeneral" GroupName="Pages" Content="常规" IsChecked="True" />
+              <RadioButton x:Name="NavKeys" GroupName="Pages" Content="快捷键" />
+              <RadioButton x:Name="NavStorage" GroupName="Pages" Content="存储" />
+              <RadioButton x:Name="NavAbout" GroupName="Pages" Content="关于" />
+            </StackPanel>
+            <StackPanel VerticalAlignment="Bottom" Margin="24,0,0,22">
+              <TextBlock Text="SNAPLINE" FontFamily="Consolas" FontSize="10" Foreground="{DynamicResource Muted}" />
+              <TextBlock Text="Windows" Style="{StaticResource Quiet}" Margin="0,5,0,0" x:Name="VersionLabel" />
+            </StackPanel>
+          </Grid>
+        </Border>
+        <Grid x:Name="Pages" Grid.Column="1" Margin="28,20,28,16">
+          <StackPanel x:Name="GeneralPage">
+            <TextBlock Text="常规" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="让截图随手可用，也让收集保持可控。" Style="{StaticResource Quiet}" Margin="0,8,0,18" />
+            <TextBlock Text="自动收集" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+            <Grid Style="{StaticResource SettingRow}">
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="收集剪贴板图片" />
+                <TextBlock Text="截图复制后，自动挂到顶部。" Style="{StaticResource Quiet}" Margin="0,5,0,0" />
+              </StackPanel>
+              <CheckBox x:Name="CollectToggle" Style="{StaticResource Toggle}" HorizontalAlignment="Right" IsChecked="True" AutomationProperties.Name="收集剪贴板图片" />
+            </Grid>
+            <Border Style="{StaticResource Rule}" />
+            <Grid Style="{StaticResource SettingRow}">
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="暂停所有自动收集" />
+                <TextBlock Text="剪贴板和截图文件夹一起暂停；仍可手动挂入。" Style="{StaticResource Quiet}" Margin="0,5,0,0" />
+              </StackPanel>
+              <CheckBox x:Name="PauseToggle" Style="{StaticResource Toggle}" HorizontalAlignment="Right" AutomationProperties.Name="暂停所有自动收集" />
+            </Grid>
+            <TextBlock Text="应用行为" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,14,0,2" />
+            <Grid Style="{StaticResource SettingRow}">
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="开机启动" />
+                <TextBlock Text="登录 Windows 后启动 Snapline，默认关闭。" Style="{StaticResource Quiet}" Margin="0,5,0,0" />
+              </StackPanel>
+              <CheckBox x:Name="StartupToggle" Style="{StaticResource Toggle}" HorizontalAlignment="Right" AutomationProperties.Name="开机启动" />
+            </Grid>
+            <Border Style="{StaticResource Rule}" />
+            <Grid Style="{StaticResource SettingRow}">
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="自动检查更新" />
+                <TextBlock Text="包含预发布版本；下载后由你手动安装。" Style="{StaticResource Quiet}" Margin="0,5,0,0" />
+              </StackPanel>
+              <CheckBox x:Name="UpdateToggle" Style="{StaticResource Toggle}" HorizontalAlignment="Right" IsChecked="True" AutomationProperties.Name="自动检查更新" />
+            </Grid>
+          </StackPanel>
+          <StackPanel x:Name="KeysPage" Visibility="Collapsed">
+            <TextBlock Text="快捷键" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="把截图晾衣绳叫出来，也可以随时收起。" Style="{StaticResource Quiet}" Margin="0,8,0,17" />
+            <TextBlock Text="显示 / 隐藏截图栏" FontWeight="SemiBold" />
+            <TextBlock Text="点击输入框，再按下你想使用的按键。" Style="{StaticResource Quiet}" Margin="0,8,0,13" />
+            <TextBox x:Name="HotkeyInput" Height="58" IsReadOnly="True" Text="Ctrl + Alt + T" FontFamily="Consolas" FontSize="23" TextAlignment="Center" VerticalContentAlignment="Center" Background="{DynamicResource Tint}" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="12,0" CaretBrush="Transparent" AutomationProperties.Name="录入显示隐藏快捷键" />
+            <TextBlock x:Name="KeyHint" Text="支持单键和 Ctrl / Alt / Shift / Win 组合。" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" TextWrapping="Wrap" LineHeight="20" MinHeight="35" />
+            <Button x:Name="RestoreKeys" Content="恢复默认" HorizontalAlignment="Left" Margin="0,8,0,12" />
+            <Border Style="{StaticResource Rule}" />
+            <TextBlock Text="截图方式" FontWeight="SemiBold" Margin="0,19,0,0" />
+            <TextBlock Text="Win + Shift + S 是 Windows 的系统截图快捷键。&#10;Snapline 收集复制后的图片，不会接管截图操作。" Style="{StaticResource Quiet}" Margin="0,8,0,0" LineHeight="22" />
+          </StackPanel>
+          <StackPanel x:Name="StoragePage" Visibility="Collapsed">
+            <TextBlock Text="存储" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="图片保存在本地，取下卡片会保留原文件。" Style="{StaticResource Quiet}" Margin="0,8,0,24" />
+            <TextBlock Text="截图收件夹" FontWeight="SemiBold" />
+            <TextBlock Text="%LOCALAPPDATA%\Snapline\Inbox" FontFamily="Consolas" Foreground="{DynamicResource Muted}" Margin="0,8,0,12" x:Name="InboxPath" TextTrimming="CharacterEllipsis" />
+            <Button x:Name="OpenInbox" Content="打开收件夹" HorizontalAlignment="Left" />
+            <Border Style="{StaticResource Rule}" Margin="0,20,0,18" />
+            <TextBlock Text="自动收集文件夹" FontWeight="SemiBold" />
+            <Grid Margin="0,8,0,16">
+              <TextBlock Text="Windows 图片 / Screenshots" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" x:Name="WatchPath" MaxWidth="460" TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" />
+              <Button x:Name="ChooseFolder" Content="选择文件夹" HorizontalAlignment="Right" />
+            </Grid>
+            <Border Style="{StaticResource Rule}" />
+            <Grid Margin="0,17,0,0">
+              <TextBlock Text="最多保留 12 张截图记录" VerticalAlignment="Center" />
+              <Button x:Name="RemoveAll" Content="全部取下" HorizontalAlignment="Right" />
+            </Grid>
+            <TextBlock Text="只移除顶部的卡片，不删除收件夹里的图片。" Style="{StaticResource Quiet}" Margin="0,11,0,0" />
+          </StackPanel>
+          <StackPanel x:Name="AboutPage" Visibility="Collapsed">
+            <TextBlock Text="关于 Snapline" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="把截图挂起来，下一步随手取用。" Style="{StaticResource Quiet}" Margin="0,8,0,24" />
+            <Grid>
+              <StackPanel>
+                <TextBlock Text="Windows 版" FontWeight="SemiBold" />
+                <TextBlock Text="" Style="{StaticResource Quiet}" Margin="0,8,0,0" x:Name="AboutVersion" />
+              </StackPanel>
+              <Button x:Name="CheckUpdates" Content="检查更新" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <Border Style="{StaticResource Rule}" Margin="0,24,0,20" />
+            <TextBlock Text="来源与作者" FontWeight="SemiBold" />
+            <TextBlock Text="原项目：Tendedero&#10;原作者：Alejandro Buján&#10;Windows 移植与发布：jiuyang5354" Foreground="{DynamicResource Muted}" Margin="0,10,0,0" LineHeight="26" />
+            <TextBlock Text="非官方 Windows 移植。保留 MIT 许可与原作者声明，&#10;使用独立的 Snapline 名称和图标。" Style="{StaticResource Quiet}" Margin="0,15,0,0" LineHeight="22" />
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+              <Button x:Name="ReleasePage" Content="版本发布页" Margin="0,0,8,0" />
+              <Button x:Name="Usage" Content="使用说明" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Grid>
+    </Border>
+    <Grid Grid.Row="2" Margin="20,0,18,0">
+      <TextBlock x:Name="SettingsFeedback" Text="设置保存后生效" Style="{StaticResource Quiet}" VerticalAlignment="Center" HorizontalAlignment="Left" MaxWidth="600" TextTrimming="CharacterEllipsis" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+        <Button x:Name="CancelSettings" Content="取消" Width="78" Margin="0,0,8,0" IsCancel="True" />
+        <Button x:Name="SaveSettings" Content="保存" Style="{StaticResource Primary}" Width="78" IsDefault="True" />
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Border>
+    

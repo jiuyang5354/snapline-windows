@@ -20,11 +20,14 @@ $sourceFiles = @('.gitignore', 'build.ps1', 'package.ps1', 'make-icon.ps1', 'app
 foreach ($name in $sourceFiles) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination (Join-Path $sourceRoot ('windows\' + $name))
 }
-New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'windows\src'), (Join-Path $sourceRoot 'windows\qa') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'windows\src'), (Join-Path $sourceRoot 'windows\qa'), (Join-Path $sourceRoot 'windows\ui') | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Filter '*.cs' | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\src')
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\Tests.cs') -Destination (Join-Path $sourceRoot 'windows\qa\Tests.cs')
+Get-ChildItem -LiteralPath (Join-Path $projectRoot 'ui') -Filter '*.xaml' | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\ui')
+}
 foreach ($repositoryFile in @('README.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md', 'CHANGELOG.md')) {
     Copy-Item -LiteralPath (Join-Path (Split-Path $projectRoot -Parent) $repositoryFile) -Destination (Join-Path $sourceRoot $repositoryFile)
 }

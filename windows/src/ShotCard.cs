@@ -28,7 +28,8 @@ namespace Snapline
         {
             Shot = shot;
             this.controller = controller;
-            Width = 160;
+            Width = 204;
+            Height = 205;
             Focusable = false;
             Cursor = Cursors.Hand;
             RenderTransformOrigin = new Point(0.5, 0.02);
@@ -40,55 +41,50 @@ namespace Snapline
             AutomationProperties.SetName(this, "截图 " + System.IO.Path.GetFileName(shot.Path));
             ToolTip = "单击复制 · 双击预览 · 长按编辑 · 拖出使用";
 
-            double fit = Math.Min(136.0 / shot.Thumbnail.PixelWidth, 104.0 / shot.Thumbnail.PixelHeight);
-            double photoWidth = shot.Thumbnail.PixelWidth * fit;
-            double photoHeight = shot.Thumbnail.PixelHeight * fit;
-            Height = photoHeight + 48;
-            var image = new Image { Source = shot.Thumbnail, Width = photoWidth, Height = photoHeight, Stretch = Stretch.Uniform };
+            var image = new Image { Source = shot.Thumbnail, Stretch = Stretch.Uniform };
             RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+            var content = new Grid { ClipToBounds = true };
+            content.RowDefinitions.Add(new RowDefinition());
+            content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(30) });
+            content.Children.Add(image);
+            var metadata = new Grid { Margin = new Thickness(4, 8, 4, 0) };
+            metadata.ColumnDefinitions.Add(new ColumnDefinition());
+            metadata.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var name = Ui.Text(System.IO.Path.GetFileNameWithoutExtension(shot.Path), 11, false);
+            name.TextTrimming = TextTrimming.CharacterEllipsis; name.Margin = new Thickness(0, 0, 8, 0);
+            var time = Ui.Text(System.IO.File.GetLastWriteTime(shot.Path).ToString("HH:mm"), 10, true);
+            Grid.SetColumn(time, 1); metadata.Children.Add(name); metadata.Children.Add(time);
+            Grid.SetRow(metadata, 1); content.Children.Add(metadata);
             var frame = new Border {
-                Width = photoWidth + 14, Height = photoHeight + 14, Padding = new Thickness(6),
-                CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1),
-                BorderBrush = new LinearGradientBrush(Color.FromArgb(210, 255, 255, 255), Color.FromArgb(65, 255, 255, 255), 90),
-                Background = new SolidColorBrush(Color.FromArgb(115, 50, 55, 63)), Child = image,
+                Width = 204, Height = 183, Padding = new Thickness(6),
+                CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1),
+                BorderBrush = Ui.Brush("Line"), Background = Ui.Brush("Surface"), Child = content,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 14, 0, 0),
-                Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 12, ShadowDepth = 5, Opacity = 0.22 }
+                Margin = new Thickness(0, 22, 0, 0),
+                Effect = new DropShadowEffect { Color = Color.FromRgb(50, 57, 46), BlurRadius = 12, ShadowDepth = 3, Opacity = 0.10 }
             };
             Children.Add(frame);
-            image.Clip = new RectangleGeometry(new Rect(0, 0, photoWidth, photoHeight), 4, 4);
-
-            var pin = new Grid { Width = 9, Height = 26, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
-            pin.Children.Add(new Rectangle {
-                RadiusX = 3.5, RadiusY = 3.5,
-                Fill = new LinearGradientBrush(new GradientStopCollection {
-                    new GradientStop(Color.FromRgb(170, 177, 181), 0), new GradientStop(Color.FromRgb(244, 246, 247), 0.35),
-                    new GradientStop(Color.FromRgb(205, 210, 215), 0.65), new GradientStop(Color.FromRgb(137, 145, 152), 1)
-                }, new Point(0, 0), new Point(1, 0)),
-                Stroke = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)), StrokeThickness = 0.6,
-                Effect = new DropShadowEffect { BlurRadius = 3, ShadowDepth = 1, Opacity = 0.3 }
-            });
-            pin.Children.Add(new Rectangle {
-                Width = 5, Height = 1.5, RadiusX = 1, RadiusY = 1, Fill = new SolidColorBrush(Color.FromArgb(90, 0, 0, 0)),
-                VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 9, 0, 0)
-            });
+            var pin = new Path { Data = Geometry.Parse("M 4,1 L 4,30 M 13,1 L 13,30 M 4,1 Q 8.5,-2 13,1 M 1,11 L 16,11"),
+                Width = 19, Height = 33, Stroke = Ui.Brush("Muted"), StrokeThickness = 2.4,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
             Children.Add(pin);
 
             remove = new Button {
                 Content = "×", FontFamily = new FontFamily("Segoe UI"), FontSize = 16, Width = 22, Height = 22,
-                Foreground = Brushes.White, Background = new SolidColorBrush(Color.FromArgb(220, 40, 44, 50)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255)), BorderThickness = new Thickness(1),
-                Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness((160 - frame.Width) / 2 + 3, 17, 0, 0), Opacity = 0, Focusable = false,
-                ToolTip = "取下这张截图"
+                Foreground = Ui.Brush("Ink"), Background = Ui.Brush("Surface"), Style = (Style)Application.Current.FindResource(typeof(Button)),
+                BorderBrush = Ui.Brush("Line"), BorderThickness = new Thickness(1),
+                Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 29, 7, 0), Opacity = 0, Focusable = false,
+                ToolTip = controller.Store.Owns(shot.Path) ? "取下截图：收件夹图片进入回收站" : "取下截图：保留外部原文件"
             };
             AutomationProperties.SetName(remove, "取下截图");
             remove.Click += delegate { controller.Discard(Shot); };
             Children.Add(remove);
             badge = new Border {
-                Child = new TextBlock { Text = "✓ 已复制", Foreground = Brushes.White, FontSize = 11 },
-                Background = new SolidColorBrush(Color.FromArgb(235, 40, 44, 50)), CornerRadius = new CornerRadius(11),
-                Padding = new Thickness(10, 4, 10, 4), VerticalAlignment = VerticalAlignment.Bottom,
+                Child = new TextBlock { Text = "✓ 已复制", FontFamily = Ui.Font, Foreground = Ui.Brush("Surface"), FontSize = 12 },
+                Background = Ui.Brush("Accent"), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 0, 40),
+                Padding = new Thickness(11, 6, 11, 6), VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center, Visibility = Visibility.Hidden, IsHitTestVisible = false
             };
             Children.Add(badge);
@@ -101,12 +97,12 @@ namespace Snapline
             PreviewMouseLeftButtonUp += Release;
             PreviewMouseMove += Move;
             LostMouseCapture += delegate { hold.Stop(); down = null; controller.Busy = false; };
-            MouseEnter += delegate { remove.Opacity = 1; ScaleTo(1.035); };
+            MouseEnter += delegate { remove.Opacity = 1; ScaleTo(1.025); };
             MouseLeave += delegate { remove.Opacity = 0; if (down == null) ScaleTo(1); };
             ContextMenu = Menu();
             ContextMenu.Opened += delegate { controller.Busy = true; };
             ContextMenu.Closed += delegate { controller.Busy = false; };
-            Sway(10);
+            Sway(3);
         }
 
         private ContextMenu Menu()
@@ -181,7 +177,7 @@ namespace Snapline
             down = null;
             if (IsMouseCaptured) ReleaseMouseCapture();
             controller.Busy = false;
-            ScaleTo(IsMouseOver ? 1.035 : 1);
+            ScaleTo(IsMouseOver ? 1.025 : 1);
         }
 
         private void ScaleTo(double value)

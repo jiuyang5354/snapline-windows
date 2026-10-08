@@ -15,6 +15,9 @@ $references += @('WindowsBase.dll', 'PresentationCore.dll', 'PresentationFramewo
 $sourcePaths = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Filter '*.cs' | ForEach-Object { $_.FullName })
 $common = @('/nologo', '/optimize+', '/platform:anycpu', '/langversion:5', '/warn:4', '/utf8output',
     ('/win32manifest:' + (Join-Path $projectRoot 'app.manifest')), ('/win32icon:' + $iconPath), ('/resource:' + $iconPath + ',Snapline.ico')) + $references
+foreach ($name in @('Theme', 'Settings')) {
+    $common += '/resource:' + (Join-Path $projectRoot ('ui\' + $name + '.xaml')) + ',Snapline.' + $name + '.xaml'
+}
 & $compilerPath @common '/target:winexe' ('/out:' + (Join-Path $binaryRoot 'Snapline.exe')) @sourcePaths
 if ($LASTEXITCODE -ne 0) { throw 'Snapline compilation failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'Snapline.exe.config') -Destination $binaryRoot

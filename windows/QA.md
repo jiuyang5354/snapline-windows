@@ -1,10 +1,10 @@
 # Snapline Windows 验证记录
 
-首次验证：2026-10-07；v1.1.0 自定义快捷键与 v1.2.1 更新 / 便捷功能验证：2026-10-08（Asia/Hong_Kong）。
+首次验证：2026-10-07；v1.3.0 新界面及完整功能复验：2026-10-08（Asia/Hong_Kong）。
 
 ## 结果
 
-发布程序与测试程序均使用 C# 5 / 系统 .NET Framework 编译器构建，零编译警告。自动检查 **91 / 91 通过**，包括原有 40 项、18 项快捷键检查和 33 项更新 / 便捷功能检查。测试源码为 `qa/Tests.cs`，完整结果由 `build.ps1 -Test` 写入 `qa/output/test-results.txt`。更新测试使用隔离的 HTTP 响应；真实联网可在公开版本文件发布后单独运行 `bin/Snapline.Tests.exe --network qa/output/network`，不计入这 91 项。
+发布程序与测试程序均使用 C# 5 / 系统 .NET Framework 编译器构建，零编译警告。v1.3.0 自动检查 **110 / 110 通过**，覆盖原有存储、剪贴板、快捷键、更新与便捷功能，以及新工具条、四页设置和界面渲染。测试源码为 `qa/Tests.cs`，完整结果由 `build.ps1 -Test` 写入 `qa/output/test-results.txt`。更新测试使用隔离的 HTTP 响应；真实联网可在公开版本文件发布后单独运行 `bin/Snapline.Tests.exe --network qa/output/network`，不计入这 110 项。
 
 执行环境为本机 Windows x64，系统版本 `10.0.26200.0`，.NET Framework 注册表 Release 值 `533509`。目标为 Windows 10 / 11 + .NET Framework 4.8 或更高；本次没有在独立 Windows 10 机器或 32 位系统上测试。
 
@@ -23,7 +23,8 @@
 | 快捷键 | 全局组合键注册，以及原生 WM_HOTKEY 消息触发展开和收起 |
 | 自定义绑定 | 旧设置兼容、修饰键标志、实时更换、旧注册释放、旧消息忽略、持久保存、重启注册 |
 | 冲突与失败 | 实际重复注册冲突、F12 与修饰键单独绑定拒绝、锁定设置文件时恢复原绑定与偏好 |
-| 设置窗口 | 实际原生录键控件接收 WM_KEYDOWN、现有快捷键通过 WM_HOTKEY 录入、保存、取消、恢复默认、托盘标签更新 |
+| 设置窗口 | 新原生 WPF 录键控件接收 WM_KEYDOWN、现有快捷键通过 WM_HOTKEY 录入；四页文字/控件边界、保存文字与图标字体、F12 错误与恢复、保存/取消、全偏好写入失败回滚 |
+| 新工具条 | 复制按钮读回真实最新 PNG 像素；暂停/恢复写入偏好与状态；按钮 WM_NCHITTEST 命中，空白区域仍穿透 |
 | 快速复制 | 实际剪贴板 PNG 像素一致、位图尺寸与文件格式；Windows 位图读回可能有 1 个色阶转换差异，PNG 保留原像素 |
 | 暂停收集 | 暂停与恢复持久保存，剪贴板与文件夹同时停止，已有图片仍可复制，恢复不补收暂停期间图片 |
 | 版本判断 | 数字版本比较、跳过草稿、识别预发布、拒绝其他仓库地址与缺少 SHA-256 的包、24 小时节流与旧设置迁移 |
@@ -40,7 +41,7 @@
 
 `qa/output/line-render.png` 是实际 WPF 窗口内容的透明渲染；`qa/output/preview.png` 将该窗口内容放在展示背景上。图片卡片里的内容均为代码生成的测试样本，没有使用用户截图或上游受限宣传素材。
 
-`qa/output/hotkey-dialog.png` 为实际快捷键设置窗口的控件渲染。录键验证使用原生窗口键盘消息；Ctrl / Alt / Shift / Win 的修饰位转换已验证，尚未逐一用实体键盘检查所有组合与键盘布局。
+`qa/output/settings-general.png`、`settings-keys.png`、`settings-storage.png`、`settings-about.png` 是新设置四页的实际 WPF 渲染；`hotkey-dialog.png` 包含真实录入状态。当前版本已用真实 WPF 窗口保存/取消偏好，同时确认系统开机启动项保持原值。录键验证使用原生窗口键盘消息；Ctrl / Alt / Shift / Win 的修饰位转换已验证，尚未逐一用实体键盘检查所有组合与键盘布局。
 
 `qa/output/tray-menu.png` 和 `qa/output/update-dialog.png` 是实际 WinForms 控件渲染。更新窗口中的 v1.4.0 为生成的测试版本，供验证比较和对话框使用，不是实际发布版本。
 

@@ -85,7 +85,7 @@ namespace Snapline
                 Check(pixels[3] == 255 && pixels[7] == 255 && pixels[0] == 10, "Legacy zero-alpha clipboard bitmaps stay visible");
 
                 // Live WPF/Win32 checks: hidden message window, real clipboard, real overlay.
-                controller = new Controller(Path.Combine(root, "live"), false);
+                controller = new Controller(Path.Combine(root, "live"), false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
                 controller.Busy = true;
                 Check(controller.Sink.ClipboardRegistered, "Windows clipboard listener registers");
                 Console.WriteLine("Global shortcut registration: " + controller.Sink.HotkeyRegistered + ", Windows error: " + controller.Sink.HotkeyError);
@@ -201,6 +201,7 @@ namespace Snapline
                 full.Close();
 
                 CheckHotkeys(controller, root, output);
+                CheckSettings(controller, output);
                 CheckConvenience(controller, root);
                 CheckUpdates(root, output);
                 controller.Dispose(); controller = null;
@@ -516,22 +517,19 @@ namespace Snapline
                     "A settings write failure restores the prior native binding and preferences");
 
             uint single = FreeHotkey(0);
-            DialogAction(controller, delegate(HotkeyDialog dialog) {
-                var input = dialog.Controls.OfType<HotkeyInput>().Single();
+            DialogAction(controller, delegate(SettingsWindow dialog) {
+                var input = dialog.Part<TextBox>("HotkeyInput");
+                input.Focus();
                 bool revealed = controller.Line.Revealed;
                 SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(controller.Sink.HotkeyId), IntPtr.Zero);
                 Check(input.Text == controller.Sink.HotkeyText && controller.Line.Revealed == revealed,
                     "The existing global shortcut can be recorded without toggling the overlay");
                 input.Focus();
-                SendMessage(input.Handle, 0x0100, new IntPtr(single), IntPtr.Zero);
-                Check(input.Text == Hotkey.Text(single, 0) && dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "保存").Enabled,
+                SendMessage(new WindowInteropHelper(dialog).Handle, 0x0100, new IntPtr(single), IntPtr.Zero);
+                Check(input.Text == Hotkey.Text(single, 0) && dialog.Part<Button>("SaveSettings").IsEnabled,
                     "The native shortcut input records a single key and enables Save");
-                using (var image = new System.Drawing.Bitmap(dialog.Width, dialog.Height))
-                {
-                    dialog.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, dialog.Width, dialog.Height));
-                    image.Save(Path.Combine(output, "hotkey-dialog.png"), System.Drawing.Imaging.ImageFormat.Png);
-                }
-                dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "保存").PerformClick();
+                SaveSettingsRender(dialog, Path.Combine(output, "hotkey-dialog.png"));
+                dialog.Part<Button>("SaveSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             });
             Check(controller.Sink.HotkeyKey == single && controller.Sink.HotkeyModifiers == 0 &&
                 new ImageStore(controller.Store.Root).Settings.HotkeyKey == single,
@@ -539,38 +537,128 @@ namespace Snapline
             var tray = (Forms.NotifyIcon)typeof(Controller).GetField("tray", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(controller);
             Check(tray.ContextMenuStrip.Items.OfType<Forms.ToolStripMenuItem>().First().Text.Contains(Hotkey.Text(single, 0)),
                 "The tray menu updates to display the custom shortcut");
-            DialogAction(controller, delegate(HotkeyDialog dialog) {
-                SendMessage(dialog.Controls.OfType<HotkeyInput>().Single().Handle, 0x0100, new IntPtr(FreeHotkey(0)), IntPtr.Zero);
-                dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "取消").PerformClick();
+            DialogAction(controller, delegate(SettingsWindow dialog) {
+                dialog.Part<TextBox>("HotkeyInput").Focus();
+                SendMessage(new WindowInteropHelper(dialog).Handle, 0x0100, new IntPtr(FreeHotkey(0)), IntPtr.Zero);
+                dialog.Part<Button>("CancelSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             });
             Check(controller.Sink.HotkeyKey == single && new ImageStore(controller.Store.Root).Settings.HotkeyKey == single,
                 "Canceling a recorded shortcut preserves the active and saved binding");
-            DialogAction(controller, delegate(HotkeyDialog dialog) {
-                dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "恢复默认").PerformClick();
-                Check(dialog.Controls.OfType<HotkeyInput>().Single().Text == Hotkey.Text(Hotkey.DefaultKey, Hotkey.DefaultModifiers),
+            DialogAction(controller, delegate(SettingsWindow dialog) {
+                dialog.Part<Button>("RestoreKeys").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(dialog.Part<TextBox>("HotkeyInput").Text == Hotkey.Text(Hotkey.DefaultKey, Hotkey.DefaultModifiers),
                     "Restore Default selects Ctrl + Alt + T in the dialog");
-                dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "取消").PerformClick();
+                dialog.Part<Button>("CancelSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             });
         }
 
-        private static void DialogAction(Controller controller, Action<HotkeyDialog> action)
+        private static void DialogAction(Controller controller, Action<SettingsWindow> action)
         {
             Exception failure = null;
-            using (var timer = new Forms.Timer { Interval = 150 })
-            {
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            try {
                 timer.Tick += delegate {
-                    var dialog = Forms.Application.OpenForms.OfType<HotkeyDialog>().FirstOrDefault();
+                    var dialog = Application.Current.Windows.OfType<SettingsWindow>().FirstOrDefault(window => window.IsVisible);
                     if (dialog == null) return;
                     timer.Stop();
                     try { action(dialog); }
                     catch (Exception ex) { failure = ex; }
-                    finally { dialog.Close(); }
+                    finally { if (dialog.IsVisible) dialog.Close(); }
                 };
                 timer.Start();
                 controller.ShowHotkeySettings();
             }
+            finally { timer.Stop(); }
             controller.Busy = true;
             if (failure != null) throw failure;
+        }
+
+        private static void SaveSettingsRender(SettingsWindow dialog, string path)
+        {
+            dialog.UpdateLayout();
+            var image = new RenderTargetBitmap((int)Math.Ceiling(dialog.View.ActualWidth * 1.5), (int)Math.Ceiling(dialog.View.ActualHeight * 1.5), 144, 144, PixelFormats.Pbgra32);
+            var drawing = new DrawingVisual();
+            using (var dc = drawing.RenderOpen()) dc.DrawRectangle(new VisualBrush(dialog.View), null, new Rect(0, 0, dialog.View.ActualWidth, dialog.View.ActualHeight));
+            image.Render(drawing);
+            File.WriteAllBytes(path, ImageStore.Png(image));
+        }
+
+        private static System.Collections.Generic.IEnumerable<DependencyObject> Descendants(DependencyObject root)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++) {
+                var child = VisualTreeHelper.GetChild(root, i); yield return child;
+                foreach (var nested in Descendants(child)) yield return nested;
+            }
+        }
+
+        private static void CheckSettings(Controller controller, string output)
+        {
+            bool originalClipboard = controller.Store.Settings.ListenClipboard, originalPaused = controller.Store.Settings.CollectionPaused;
+            bool originalAutomatic = controller.Store.Settings.AutoCheckUpdates;
+            controller.Store.Settings.UpdateCheckedUtcTicks = DateTime.UtcNow.Ticks;
+            string runValue;
+            using (var run = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
+                runValue = run == null ? null : run.GetValue("Snapline") as string;
+            DialogAction(controller, delegate(SettingsWindow dialog) {
+                Check(dialog.Part<CheckBox>("StartupToggle").IsChecked == controller.StartupEnabled, "Settings reads actual startup state without enabling it");
+                var saveText = Descendants(dialog.Part<Button>("SaveSettings")).OfType<TextBlock>().First(block => block.Text == "保存");
+                Check(((SolidColorBrush)saveText.Foreground).Color == ((SolidColorBrush)Ui.Brush("Surface")).Color,
+                    "Save button renders light text on its dark surface");
+                var closeText = Descendants(dialog.Part<Button>("CloseSettings")).OfType<TextBlock>().First();
+                Check(closeText.FontFamily.Source == "Segoe MDL2 Assets", "Close button renders using the real Windows icon font");
+                foreach (string page in new[] { "General", "Keys", "Storage", "About" }) {
+                    dialog.ShowPage(page); dialog.UpdateLayout();
+                    var bounds = (Grid)dialog.View.FindName("Pages");
+                    var content = dialog.Part<StackPanel>(page + "Page");
+                    bool fits = Descendants(content).OfType<FrameworkElement>().Where(el => el is TextBlock || el is Button || el is CheckBox || el is TextBox).All(el => {
+                        var box = el.TransformToAncestor(bounds).TransformBounds(new Rect(el.RenderSize));
+                        bool inside = box.Top >= -1 && box.Bottom <= bounds.ActualHeight + 1 && box.Right <= bounds.ActualWidth + 1;
+                        if (!inside) Console.WriteLine("Clipped " + page + " / " + el.Name + " / " + box + " / available " + bounds.RenderSize);
+                        return inside;
+                    });
+                    Check(fits, page + " settings page has no clipped text or controls");
+                    SaveSettingsRender(dialog, Path.Combine(output, "settings-" + page.ToLowerInvariant() + ".png"));
+                }
+                dialog.ShowPage("Keys");
+                Check(!dialog.SetCandidate(0x7b, 0) && !dialog.Part<Button>("SaveSettings").IsEnabled && dialog.Part<TextBlock>("KeyHint").Text.Contains("F12"), "New settings rejects reserved F12 with inline error");
+                dialog.Part<Button>("RestoreKeys").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(dialog.Part<Button>("SaveSettings").IsEnabled, "Restore default recovers settings Save after invalid input");
+                dialog.Part<CheckBox>("CollectToggle").IsChecked = !originalClipboard;
+                dialog.Part<CheckBox>("StartupToggle").IsChecked = !controller.StartupEnabled;
+                dialog.Part<Button>("CancelSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            });
+            Check(controller.Store.Settings.ListenClipboard == originalClipboard && new ImageStore(controller.Store.Root).Settings.ListenClipboard == originalClipboard,
+                "Canceling general preferences preserves active and stored settings");
+            DialogAction(controller, delegate(SettingsWindow dialog) {
+                dialog.ShowPage("General");
+                dialog.Part<CheckBox>("CollectToggle").IsChecked = false;
+                dialog.Part<CheckBox>("PauseToggle").IsChecked = true;
+                dialog.Part<CheckBox>("UpdateToggle").IsChecked = false;
+                dialog.Part<Button>("SaveSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            });
+            var saved = new ImageStore(controller.Store.Root).Settings;
+            Check(!saved.ListenClipboard && saved.CollectionPaused && !saved.AutoCheckUpdates, "New settings saves collection, pause and update preferences together");
+            Check(controller.Line.StatusText.Text == "收集已暂停", "Saved settings update the real shelf status");
+            string error;
+            using (var locked = new FileStream(Path.Combine(controller.Store.Root, "settings.json.tmp"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+                Check(!controller.ApplyPreferences(true, false, true, controller.Store.Settings.WatchFolder, FreeHotkey(7), 7, out error) &&
+                    !controller.Store.Settings.ListenClipboard && controller.Store.Settings.CollectionPaused && !controller.Store.Settings.AutoCheckUpdates,
+                    "Settings write failure rolls back all collection preferences as well as the shortcut");
+            Check(controller.ApplyPreferences(originalClipboard, originalPaused, originalAutomatic, controller.Store.Settings.WatchFolder, controller.Sink.HotkeyKey, controller.Sink.HotkeyModifiers, out error),
+                "Settings can save normally after a write failure");
+            using (var run = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
+                Check((run == null ? null : run.GetValue("Snapline") as string) == runValue, "Opening, canceling and saving preferences leaves real startup entry untouched");
+            controller.Line.Reveal(Forms.Screen.FromPoint(Native.Cursor())); Pump(400);
+            var latest = controller.Store.Items.Last();
+            controller.Line.LatestButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(ImageStore.Digest(BitmapFrame.Create((Stream)Clipboard.GetData("PNG"), BitmapCreateOptions.None, BitmapCacheOption.OnLoad)) == latest.Hash,
+                "New shelf Copy Latest button writes actual latest image pixels");
+            controller.Line.PauseButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(controller.Store.Settings.CollectionPaused != originalPaused && controller.Line.StatusText.Text == "收集已暂停", "New shelf pause button updates saved preference and visible status");
+            controller.Line.PauseButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(controller.Store.Settings.CollectionPaused == originalPaused, "New shelf resume button restores collection");
+            var buttonPoint = controller.Line.SettingsButton.PointToScreen(new Point(10, 10));
+            Check(Hit(new WindowInteropHelper(controller.Line).Handle, buttonPoint) == 1, "Native hit testing accepts the new toolbar buttons");
         }
 
         private static DataObject BackupClipboard()
@@ -694,23 +782,22 @@ namespace Snapline
         {
             var visual = new DrawingVisual();
             const int width = 1200, height = 500;
+            double originalWidth = line.Width;
+            line.Width = 1132;
+            Pump(150);
             using (var dc = visual.RenderOpen())
             {
-                dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(22, 28, 35)), null, new Rect(0, 0, width, height));
-                DrawText(dc, "Snapline", 40, Brushes.White, 64, 42);
-                DrawText(dc, "Screenshots, within reach.  /  Windows", 15, new SolidColorBrush(Color.FromRgb(159, 177, 184)), 66, 101);
-                dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(35, 49, 52)), null, new Rect(48, 155, 1104, 280));
-                // Crop the native overlay around its center instead of scaling down photos on wide monitors.
-                dc.PushClip(new RectangleGeometry(new Rect(48, 155, 1104, 280)));
-                dc.DrawRectangle(new VisualBrush(line) { Stretch = Stretch.None, AlignmentX = AlignmentX.Center, AlignmentY = AlignmentY.Top }, null,
-                    new Rect(48 + (1104 - line.ActualWidth) / 2, 169, line.ActualWidth, line.ActualHeight));
-                dc.Pop();
-                DrawText(dc, hotkey + "   /   click to copy · hold to edit · drag to use", 13,
-                    new SolidColorBrush(Color.FromRgb(159, 177, 184)), 66, 461);
+                dc.DrawRectangle(Ui.Brush("Paper"), null, new Rect(0, 0, width, height));
+                DrawText(dc, "Snapline", 32, Ui.Brush("Ink"), 60, 30);
+                DrawText(dc, "Screenshots, within reach.  /  Windows v" + Updates.CurrentVersion, 14, Ui.Brush("Muted"), 62, 81);
+                dc.DrawRectangle(new VisualBrush(line) { Stretch = Stretch.Fill }, null, new Rect(34, 117, 1132, 320));
+                DrawText(dc, hotkey + "  /  Tendedero by Alejandro Buján · Unofficial Windows port", 12, Ui.Brush("Muted"), 62, 461);
             }
             var image = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
             image.Render(visual);
             File.WriteAllBytes(path, ImageStore.Png(image));
+            line.Width = originalWidth;
+            Pump(100);
         }
     }
 }

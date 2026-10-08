@@ -47,7 +47,8 @@ namespace Snapline
         private Release balloonUpdate;
         private bool checkingUpdate;
         private UpdateDialog updateDialog;
-        private HotkeyDialog hotkeyDialog;
+        private SettingsWindow settingsWindow;
+        private bool DialogOpen { get { return settingsWindow != null || updateDialog != null; } }
 
         internal Controller(string root, bool watchFiles, Updates updateClient = null)
         {
@@ -60,6 +61,7 @@ namespace Snapline
             tray = new Forms.NotifyIcon { Icon = icon, Text = "Snapline · 截图晾衣绳", Visible = true };
             var menu = new Forms.ContextMenuStrip();
             toggleMenu = Add(menu, "显示 / 隐藏    " + (Sink.HotkeyRegistered ? Sink.HotkeyText : "点击托盘图标"), Toggle);
+            Add(menu, "设置…", delegate { ShowSettings("General"); });
             Add(menu, "设置快捷键…", ShowHotkeySettings);
             latestMenu = Add(menu, "复制最近一张", delegate { CopyLatest(); });
             latestMenu.Enabled = Store.Items.Count > 0;
@@ -69,7 +71,7 @@ namespace Snapline
             pauseMenu.Click += delegate { SetCollectionPaused(pauseMenu.Checked); };
             menu.Items.Add(pauseMenu);
             clipboardMenu = new Forms.ToolStripMenuItem("收集剪贴板图片") { Checked = Store.Settings.ListenClipboard, CheckOnClick = true };
-            clipboardMenu.Click += delegate { Store.Settings.ListenClipboard = clipboardMenu.Checked; Store.Save(); };
+            clipboardMenu.Click += delegate { Store.Settings.ListenClipboard = clipboardMenu.Checked; Store.Save(); Line.RefreshStatus(); };
             menu.Items.Add(clipboardMenu);
             Add(menu, "选择截图文件夹…", ChooseFolder);
             Add(menu, "打开截图收件夹", delegate { Shell(Store.Inbox, null); });
@@ -92,7 +94,7 @@ namespace Snapline
             Add(menu, "使用说明", Help);
             Add(menu, "退出", delegate { Application.Current.Shutdown(); });
             menu.Opened += delegate { Busy = true; RefreshStartup(); };
-            menu.Closed += delegate { Busy = hotkeyDialog != null || updateDialog != null; };
+            menu.Closed += delegate { Busy = DialogOpen; };
             tray.ContextMenuStrip = menu;
             tray.MouseClick += delegate(object sender, Forms.MouseEventArgs e) { if (e.Button == Forms.MouseButtons.Left) Toggle(); };
             tray.BalloonTipClicked += delegate { if (balloonUpdate != null) ShowUpdate(balloonUpdate); };
@@ -101,7 +103,7 @@ namespace Snapline
             lastSequence = Native.GetClipboardSequenceNumber();
             Sink.ClipboardChanged += delegate { uint sequence = Native.GetClipboardSequenceNumber(); dispatcher.BeginInvoke(new Action(delegate { CaptureClipboard(sequence, 0); })); };
             Sink.ToggleRequested += delegate {
-                if (hotkeyDialog != null) hotkeyDialog.CaptureCurrent(Sink.HotkeyKey, Sink.HotkeyModifiers);
+                if (settingsWindow != null && settingsWindow.RecordingHotkey) settingsWindow.CaptureCurrent(Sink.HotkeyKey, Sink.HotkeyModifiers);
                 else Toggle();
             };
             if (watchFiles)
@@ -303,6 +305,7 @@ namespace Snapline
             lastSequence = Native.GetClipboardSequenceNumber();
             pauseMenu.Checked = paused;
             tray.Text = paused ? "Snapline · 已暂停自动收集" : "Snapline · 截图晾衣绳";
+            Line.RefreshStatus();
             return true;
         }
 
@@ -311,6 +314,44 @@ namespace Snapline
             try { startupMenu.Checked = Startup.Enabled(Forms.Application.ExecutablePath, Store.Root); }
             catch (System.Security.SecurityException) { startupMenu.Checked = false; }
             catch (UnauthorizedAccessException) { startupMenu.Checked = false; }
+        }
+
+        internal bool StartupEnabled { get { RefreshStartup(); return startupMenu.Checked; } }
+
+        internal bool SetStartup(bool enabled, out string error)
+        {
+            error = null;
+            try { Startup.Set(enabled, Forms.Application.ExecutablePath, Store.Root); }
+            catch (Exception ex) {
+                if (!(ex is IOException) && !(ex is UnauthorizedAccessException) && !(ex is System.Security.SecurityException)) throw;
+                error = "开机启动更改失败：" + ex.Message;
+            }
+            RefreshStartup();
+            return error == null;
+        }
+
+        internal bool ApplyPreferences(bool clipboard, bool paused, bool automatic, string folder, uint key, uint modifiers, out string error)
+        {
+            var settings = Store.Settings;
+            bool oldClipboard = settings.ListenClipboard, oldPaused = settings.CollectionPaused, oldAutomatic = settings.AutoCheckUpdates;
+            string oldFolder = settings.WatchFolder;
+            settings.ListenClipboard = clipboard; settings.CollectionPaused = paused;
+            settings.AutoCheckUpdates = automatic; settings.WatchFolder = folder;
+            if (!ChangeHotkey(key, modifiers, out error)) {
+                settings.ListenClipboard = oldClipboard; settings.CollectionPaused = oldPaused;
+                settings.AutoCheckUpdates = oldAutomatic; settings.WatchFolder = oldFolder;
+                return false;
+            }
+            clipboardMenu.Checked = clipboard; pauseMenu.Checked = paused; autoUpdateMenu.Checked = automatic;
+            tray.Text = paused ? "Snapline · 已暂停自动收集" : "Snapline · 截图晾衣绳";
+            lastSequence = Native.GetClipboardSequenceNumber();
+            if (watch != null) {
+                if (oldPaused != paused) watch.DiscardPending();
+                if (!string.Equals(oldFolder, folder, StringComparison.OrdinalIgnoreCase)) watch.Restart();
+            }
+            Line.RefreshStatus();
+            if (Updates.Due(settings, DateTime.UtcNow)) CheckUpdates(false);
+            return true;
         }
 
         internal void SetAutoUpdates(bool enabled)
@@ -334,6 +375,7 @@ namespace Snapline
             checkingUpdate = true;
             updateMenu.Enabled = false;
             updateMenu.Text = "正在检查更新…";
+            if (settingsWindow != null) settingsWindow.UpdateChecking(true);
             Store.Settings.UpdateCheckedUtcTicks = DateTime.UtcNow.Ticks;
             try
             {
@@ -364,6 +406,7 @@ namespace Snapline
                 {
                     updateMenu.Enabled = true;
                     updateMenu.Text = availableUpdate == null ? "检查更新…" : "更新到 " + availableUpdate.Tag + "…";
+                    if (settingsWindow != null) settingsWindow.UpdateChecking(false);
                     try { Store.Save(); }
                     catch (IOException) { }
                     catch (UnauthorizedAccessException) { }
@@ -373,7 +416,7 @@ namespace Snapline
 
         private void ShowUpdate(Release release)
         {
-            if (disposed || hotkeyDialog != null) return;
+            if (disposed) return;
             if (updateDialog != null) { updateDialog.Activate(); return; }
             Busy = true;
             try
@@ -385,8 +428,12 @@ namespace Snapline
                         else Shell("explorer.exe", "/select,\"" + target + "\"");
                     })) updateDialog.ShowDialog();
             }
-            finally { updateDialog = null; Busy = false; }
+            finally { updateDialog = null; Busy = DialogOpen; }
         }
+
+        internal void RequestUpdate() { if (availableUpdate != null) ShowUpdate(availableUpdate); else CheckUpdates(true); }
+        internal void OpenInbox() { Shell(Store.Inbox, null); }
+        internal void OpenReleases() { Shell(Updates.Repository + "/releases", null); }
 
         internal void Open(Shot shot) { Line.Tuck(); Shell(shot.Path, null); }
         internal void Edit(Shot shot) { Line.Tuck(); Shell("mspaint.exe", "\"" + shot.Path + "\""); }
@@ -411,7 +458,7 @@ namespace Snapline
                 }
             }
             catch (Exception ex) { if (!ImageStore.IsImageError(ex)) throw; Notify("保存失败：" + ex.Message); }
-            finally { Busy = false; }
+            finally { Busy = DialogOpen; }
         }
 
         internal void Discard(Shot shot)
@@ -420,7 +467,7 @@ namespace Snapline
             catch (Exception ex) { if (!ImageStore.IsImageError(ex) && !(ex is OperationCanceledException)) throw; Notify("无法取下截图：" + ex.Message); }
         }
 
-        private void Import()
+        internal void Import()
         {
             Busy = true;
             try
@@ -435,7 +482,7 @@ namespace Snapline
                         catch (Exception ex) { if (!ImageStore.IsImageError(ex)) throw; Notify("无法读取图片：" + System.IO.Path.GetFileName(path)); }
                     }
             }
-            finally { Busy = false; }
+            finally { Busy = DialogOpen; }
         }
 
         private void ChooseFolder()
@@ -451,7 +498,7 @@ namespace Snapline
                         if (watch != null) watch.Restart();
                     }
             }
-            finally { Busy = false; }
+            finally { Busy = DialogOpen; }
         }
 
         internal bool ChangeHotkey(uint key, uint modifiers, out string error)
@@ -475,32 +522,39 @@ namespace Snapline
                 return false;
             }
             toggleMenu.Text = "显示 / 隐藏    " + Sink.HotkeyText;
+            Line.RefreshStatus();
             return true;
         }
 
         internal void ShowHotkeySettings()
+        { ShowSettings("Keys"); }
+
+        internal void ShowSettings(string page)
         {
+            if (settingsWindow != null) { settingsWindow.ShowPage(page); settingsWindow.Activate(); return; }
             Busy = true;
+            Line.Tuck();
             try
             {
-                using (hotkeyDialog = new HotkeyDialog(Sink.HotkeyKey, Sink.HotkeyModifiers, delegate(uint key, uint modifiers) {
-                    string error;
-                    return ChangeHotkey(key, modifiers, out error) ? null : error;
-                })) hotkeyDialog.ShowDialog();
+                settingsWindow = new SettingsWindow(this);
+                settingsWindow.ShowPage(page);
+                settingsWindow.UpdateChecking(checkingUpdate);
+                settingsWindow.ShowDialog();
             }
-            finally { hotkeyDialog = null; Busy = false; }
+            finally { settingsWindow = null; Busy = DialogOpen; }
         }
 
-        private void Help()
+        internal void Help()
         {
             Busy = true;
             try { MessageBox.Show("Win + Shift + S 或 PrintScreen 截图后，图片自动挂入。\n收集剪贴板图片也会收集从其他应用复制的图片，可在托盘菜单关闭。\n\n鼠标在屏幕顶端停留，或 " + Sink.HotkeyText + "：展开 / 收起。\n右键托盘 → 设置快捷键：录入单键或组合键，保存后立即生效。\n单击：复制图片。双击：用默认图片应用打开。\n长按 0.45 秒：用画图编辑，保存后刷新缩略图。\n拖入应用：发送图片或文件副本。\n拖入文件夹：由目标应用决定复制或移动；Shift 拖动可请求移动。\n右键：另存为、在文件夹中显示或取下。\n\n托盘 → 复制最近一张：直接复制，无须展开。\n暂停所有自动收集：同时暂停剪贴板和文件夹，重启后保持。\n开机启动：可选，默认关闭；移动程序后请重新勾选。\n自动检查更新：默认开启，每 24 小时检查并提醒；可关闭。\n下载新版后退出旧版，解压运行；图片和设置保留。\n\n叉号：收件夹里的图片进入回收站；外部原文件保留。\n最多保留 12 张，屏幕较窄时显示最近几张；旧文件仍在收件夹。\n\nSnapline " + Updates.CurrentVersion + " · Windows 非官方移植版\n基于 Alejandro Buján 的 Tendedero 交互与 MIT 代码。", "Snapline · 使用说明", MessageBoxButton.OK, MessageBoxImage.Information); }
-            finally { Busy = false; }
+            finally { Busy = DialogOpen; }
         }
 
         public void Dispose()
         {
             disposed = true;
+            if (settingsWindow != null) settingsWindow.Close();
             mouse.Stop();
             updateTimer.Stop();
             updateCancel.Cancel();

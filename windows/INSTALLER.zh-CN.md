@@ -4,7 +4,7 @@ Snapline 是 Tendedero 的非官方 Windows 移植版。原项目作者为 Aleja
 
 ## 安装和桌面图标
 
-下载 `Snapline-Windows-Setup-v1.2.1.exe`，双击运行中文安装向导。“创建桌面快捷方式”默认勾选，可以取消。开始菜单入口始终创建；桌面图标使用程序自己的 Snapline 图标。
+下载 `Snapline-Windows-Setup-v1.3.0.exe`，双击运行中文安装向导。“创建桌面快捷方式”默认勾选，可以取消。开始菜单入口始终创建；桌面图标使用程序自己的 Snapline 图标。
 
 默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，只安装给当前 Windows 用户，不需要管理员权限。需要 Windows 10 / 11 和 .NET Framework 4.8 或更高版本；不自动下载或修改系统运行时。
 
@@ -12,7 +12,7 @@ Snapline 是 Tendedero 的非官方 Windows 移植版。原项目作者为 Aleja
 
 从便携版迁移或覆盖安装前，请先从托盘退出旧版。默认图片和设置仍在 `%LOCALAPPDATA%\Snapline`，安装包不迁移、覆盖或删除它们。以前用 `--data-dir` 指定目录的用户，应在新快捷方式的目标后附加相同参数。旧便携版开启过开机启动时，在安装版托盘里重新勾选，以更新程序路径。
 
-程序及安装包目前未作代码签名，Windows 可能提示未知发布者。程序功能与已发布的 v1.2.1 便携版一致，仍为预发布。
+程序及安装包目前未作代码签名，Windows 可能提示未知发布者。程序与同版本便携 ZIP 使用相同的已验证 EXE，包含新版截图栏和统一设置窗口，仍为预发布。
 
 ## 卸载
 
