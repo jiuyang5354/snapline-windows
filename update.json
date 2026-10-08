@@ -1,0 +1,17 @@
+[
+    {
+        "tag_name":  "v1.2.1",
+        "draft":  false,
+        "prerelease":  true,
+        "body":  "# Snapline v1.2.1 · 更新提醒与便捷操作 Windows 预发布\n\nTendedero 的非官方 Windows 移植版。原项目作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**，原仓库为 [alejandrobujan/tendedero](https://github.com/alejandrobujan/tendedero)，参考提交为 `3c866d94d25ee9d1e008aecd9a78a4e9b2bf06a4`。\n\n## 下载\n\n- `Snapline-Windows-v1.2.1.zip`：便携程序、配置、中文指南、验证记录和许可说明。解压整个文件夹后运行 `Snapline.exe`。\n- `Snapline-Windows-Source-v1.2.1.zip`：Windows 源码、编译/打包脚本、测试源码、文档和许可说明。\n- `SHA256SUMS.txt`：两个下载包的 SHA-256 校验值。\n\n目标系统：Windows 10 / 11 + .NET Framework 4.8 或更高版本。无须安装 Python、Node.js 或 Swift；无需管理员权限。当前二进制未作代码签名。\n\n## 本次新增\n\nv1.2.1 修复了 v1.2.0 在本机 .NET Framework HTTP 客户端中的 HTTPS 握手问题，明确使用 .NET Framework 4.8 与系统默认 TLS。建议下载本补丁版本。\n\n右键托盘图标即可使用：\n\n1. **自动检查更新（含预发布）**：默认开启，启动约 15 秒后检查，每 24 小时最多一次；同一版本只提醒一次。离线静默失败，可关闭后台检查。\n2. **检查更新与下载**：查看发布说明、选择 ZIP 保存位置、下载并校验大小和 SHA-256，完成后打开文件位置。可取消，失败不覆盖已有包；另有“打开版本发布页”入口。\n3. **暂停所有自动收集**：同时暂停剪贴板和文件夹的新图片，重启后保持；已有图片仍可复制、预览，也可手动挂入。恢复后跳过暂停期间的图片。\n4. **复制最近一张**：无须展开，直接复制当前列表最近一张并提示；没有图片时禁用。\n5. **开机启动**：默认关闭，可勾选为当前 Windows 用户登录时启动。移动程序后请重新勾选更新路径。\n\n**旧版用户需先手动下载一次 v1.2.1。** 退出旧版，解压整个新版文件夹并运行。之后可收到版本提醒。当前提供自动检查、提醒与点击下载；更新仍需退出旧版并解压运行新版。默认数据目录不变，图片、快捷键和偏好继续使用。使用自定义 `--data-dir` 时，请带上相同目录。\n\n更新只读取本仓库公开的版本文件，并在点击下载时访问 GitHub 发布包；无需登录，不上传截图、剪贴板内容或本地路径。\n\n## 原有功能\n\n自定义全局显示 / 隐藏快捷键（单键或 Ctrl / Alt / Shift / Win 组合）；屏幕顶端悬停展开、托盘操作；收集剪贴板图片和监听截图文件夹；复制、预览、画图编辑、拖放、右键另存为；最近图片与设置恢复；重复启动唤起现有实例。\n\n默认快捷键为 `Ctrl + Alt + T`；被占用时尝试 `Ctrl + Alt + Shift + T`。具体操作见随包中文指南或 [仓库使用说明](https://github.com/jiuyang5354/snapline-windows#使用方法)。\n\n## 注意事项与验证范围\n\n- 默认会保存所有复制到剪贴板的图片，无法保证只识别截图；可从托盘关闭收集。保存位置为 `%LOCALAPPDATA%\\Snapline\\Inbox`。\n- 展示最多恢复最近 12 张，超出展示数量的旧文件仍保留。点击叉号会把收件夹图片送入回收站；外部原文件只取下。“全部取下”保留文件。\n- 拖放接收格式及复制/移动行为由目标应用决定。自动检查会联网，可从托盘关闭；没有账号或遥测。系统剪贴板同步和其他应用的数据处理由各自设置控制。\n- 单键会影响其他应用中的同名按键；字母或数字建议使用组合键。修饰键须搭配其他键；F12 为 Windows 保留键，其他已占用或无法注册的组合会在设置窗口提示。\n- 本机自动检查 **91 / 91 通过**，包括更新比较、实际定时器、暂停 / 恢复、真实剪贴板快速复制、校验失败与取消保护、托盘和设置窗口。独立 Windows 10 / 32 位、物理多屏、真实鼠标完整手势、具体软件拖放、实际全屏应用、登录启动及系统通知交互仍需人工验证，此次仍为预发布。完整证据见 [QA.md](https://github.com/jiuyang5354/snapline-windows/blob/main/windows/QA.md)。\n\n## 署名与许可\n\n本版本使用 Snapline 名称和新绘制图标，不包含原项目的图标或宣传图片，不代表原作者背书。上游代码为 MIT 许可，原名称、原图标和上游 docs 图片不在该授权范围内。仓库及两个下载包均保留原作者版权、完整上游许可和 Windows MIT 许可；详见 [NOTICE.md](https://github.com/jiuyang5354/snapline-windows/blob/main/NOTICE.md)。\n",
+        "assets":  [
+                       {
+                           "name":  "Snapline-Windows-v1.2.1.zip",
+                           "state":  "uploaded",
+                           "size":  92398,
+                           "digest":  "sha256:d6aaea651023c58609f3fa0705e135c60d4d43c80713f6b2814b5e6a93acd321",
+                           "browser_download_url":  "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.1/Snapline-Windows-v1.2.1.zip"
+                       }
+                   ]
+    }
+]
