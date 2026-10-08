@@ -30,8 +30,26 @@ foreach ($repositoryFile in @('README.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'N
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'docs') | Out-Null
 Copy-Item -LiteralPath (Join-Path (Split-Path $projectRoot -Parent) 'docs\preview.png') -Destination (Join-Path $sourceRoot 'docs\preview.png')
-$portableZip = Join-Path $projectRoot 'Snapline-Windows-v1.1.0.zip'
-$sourceZip = Join-Path $projectRoot 'Snapline-Windows-Source-v1.1.0.zip'
+$releaseTag = 'v' + [System.Reflection.AssemblyName]::GetAssemblyName((Join-Path $projectRoot 'bin\Snapline.exe')).Version.ToString(3)
+$portableZip = Join-Path $projectRoot ('Snapline-Windows-' + $releaseTag + '.zip')
+$sourceZip = Join-Path $projectRoot ('Snapline-Windows-Source-' + $releaseTag + '.zip')
 Compress-Archive -LiteralPath $portableRoot -DestinationPath $portableZip -Force
 Compress-Archive -LiteralPath $sourceRoot -DestinationPath $sourceZip -Force
+$repositoryRoot = Split-Path $projectRoot -Parent
+$portableHash = (Get-FileHash -LiteralPath $portableZip -Algorithm SHA256).Hash.ToLowerInvariant()
+$sourceHash = (Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLowerInvariant()
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText((Join-Path $repositoryRoot 'SHA256SUMS.txt'),
+    $portableHash + '  ' + [System.IO.Path]::GetFileName($portableZip) + "`n" + $sourceHash + '  ' + [System.IO.Path]::GetFileName($sourceZip) + "`n", $utf8)
+$updateFeed = @([ordered]@{
+    tag_name = $releaseTag; draft = $false; prerelease = $true
+    body = [System.IO.File]::ReadAllText((Join-Path $repositoryRoot 'CHANGELOG.md'))
+    assets = @([ordered]@{
+        name = [System.IO.Path]::GetFileName($portableZip); state = 'uploaded'; size = (Get-Item -LiteralPath $portableZip).Length
+        digest = 'sha256:' + $portableHash
+        browser_download_url = 'https://github.com/jiuyang5354/snapline-windows/releases/download/' + $releaseTag + '/' + [System.IO.Path]::GetFileName($portableZip)
+    })
+})
+[System.IO.File]::WriteAllText((Join-Path $distributionRoot 'update.json'), (ConvertTo-Json -InputObject $updateFeed -Depth 5), $utf8)
+Write-Output 'Upload and verify release assets first, then publish dist/update.json as the repository-root update.json.'
 Get-Item -LiteralPath $portableZip, $sourceZip | Select-Object Name,Length

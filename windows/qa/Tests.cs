@@ -4,7 +4,13 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -30,6 +36,7 @@ namespace Snapline
         [STAThread]
         private static int Main(string[] args)
         {
+            if (args.Length == 2 && args[0] == "--network") return CheckNetwork(Path.GetFullPath(args[1]));
             string output = Path.GetFullPath(args[0]);
             string root = Path.Combine(output, "run-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
             Directory.CreateDirectory(root);
@@ -194,6 +201,8 @@ namespace Snapline
                 full.Close();
 
                 CheckHotkeys(controller, root, output);
+                CheckConvenience(controller, root);
+                CheckUpdates(root, output);
                 controller.Dispose(); controller = null;
                 using (var restarted = new Controller(Path.Combine(root, "live"), false))
                 {
@@ -223,6 +232,227 @@ namespace Snapline
                 }
                 app.Shutdown();
             }
+        }
+
+        private static void CheckConvenience(Controller controller, string root)
+        {
+            int count = controller.Store.Items.Count;
+            var latest = controller.Store.Items[count - 1];
+            bool copied = controller.CopyLatest();
+            var copiedImage = Controller.RepairBitmapAlpha(Clipboard.GetImage());
+            var copiedPng = Clipboard.GetData("PNG") as Stream;
+            var lossless = BitmapFrame.Create(copiedPng, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            Check(copied && ImageStore.Digest(lossless) == latest.Hash && copiedImage.PixelWidth == lossless.PixelWidth &&
+                copiedImage.PixelHeight == lossless.PixelHeight && Clipboard.ContainsFileDropList(),
+                "Quick Copy writes the latest screenshot to the real system clipboard");
+            Check(controller.SetCollectionPaused(true) && new ImageStore(controller.Store.Root).Settings.CollectionPaused,
+                "Pausing collection is saved and survives restart");
+            Clipboard.SetImage(Fixture(390, 230, 8));
+            Pump(450);
+            Check(controller.Store.Items.Count == count, "Pause blocks new clipboard captures while preserving existing cards");
+            Check(controller.CopyLatest(), "Existing screenshots remain copyable while collection is paused");
+            Check(controller.SetCollectionPaused(false) && !new ImageStore(controller.Store.Root).Settings.CollectionPaused,
+                "Resuming collection persists without changing the clipboard preference");
+            Pump(300);
+            Check(controller.Store.Items.Count == count, "Resuming does not collect clipboard images from the paused period");
+            Clipboard.SetImage(Fixture(395, 235, 9));
+            Pump(500);
+            Check(controller.Store.Items.Count == count + 1, "New clipboard images are collected after resuming");
+
+            var folderStore = new ImageStore(Path.Combine(root, "paused-watch"));
+            folderStore.Settings.CollectionPaused = true;
+            folderStore.Settings.WatchFolder = folderStore.Inbox;
+            using (var watcher = new CaptureWatch(folderStore, Dispatcher.CurrentDispatcher))
+            {
+                string ignored = Path.Combine(folderStore.Inbox, "paused.png");
+                File.WriteAllBytes(ignored, ImageStore.Png(Fixture(201, 151, 1)));
+                Pump(500);
+                Check(folderStore.Items.Count == 0, "Pause also blocks automatic screenshot-folder collection");
+                folderStore.Settings.CollectionPaused = false;
+                Pump(300);
+                Check(folderStore.Items.Count == 0 && File.Exists(ignored), "Resuming does not import or delete folder images created while paused");
+                File.WriteAllBytes(Path.Combine(folderStore.Inbox, "resumed.png"), ImageStore.Png(Fixture(202, 152, 2)));
+                Pump(650);
+                Check(folderStore.Items.Count == 1, "Screenshot-folder collection resumes for new files");
+            }
+            controller.SetAutoUpdates(false);
+            Check(!new ImageStore(controller.Store.Root).Settings.AutoCheckUpdates, "Disabling automatic update checks survives restart");
+            string command = Startup.Command(@"C:\含 空格\Snapline.exe", Path.Combine(root, "含 空格"));
+            Check(command.StartsWith("\"C:\\含 空格\\Snapline.exe\" --data-dir \"") && command.EndsWith("含 空格\""),
+                "Optional startup command quotes executable and data paths containing spaces and Unicode");
+            Check(Startup.Command(@"C:\Snapline.exe", @"D:\").EndsWith("D:\\\\\""),
+                "Startup command preserves a drive-root data directory through Windows argument escaping");
+        }
+
+        private sealed class UpdateHandler : HttpMessageHandler
+        {
+            internal byte[] Json;
+            internal byte[] Package;
+            internal HttpStatusCode Status = HttpStatusCode.OK;
+            internal int Calls;
+            internal bool Headers;
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel)
+            {
+                cancel.ThrowIfCancellationRequested();
+                Calls++;
+                Headers = request.Headers.UserAgent.ToString().StartsWith("Snapline/") && !request.Headers.Contains("Authorization");
+                return Task.FromResult(new HttpResponseMessage(Status) {
+                    RequestMessage = request,
+                    Content = new ByteArrayContent(request.RequestUri.Host == "raw.githubusercontent.com" ? Json : Package)
+                });
+            }
+        }
+
+        private static string ReleaseJson(string tag, byte[] package, bool draft, bool prerelease)
+        {
+            string digest;
+            using (var hash = SHA256.Create()) digest = BitConverter.ToString(hash.ComputeHash(package)).Replace("-", "").ToLowerInvariant();
+            return "{\"tag_name\":\"" + tag + "\",\"draft\":" + draft.ToString().ToLowerInvariant() +
+                ",\"prerelease\":" + prerelease.ToString().ToLowerInvariant() + ",\"body\":\"Update fixture\",\"assets\":[{" +
+                "\"name\":\"Snapline-Windows-" + tag + ".zip\",\"state\":\"uploaded\",\"size\":" + package.Length +
+                ",\"digest\":\"sha256:" + digest + "\",\"browser_download_url\":\"" + Updates.Repository +
+                "/releases/download/" + tag + "/Snapline-Windows-" + tag + ".zip\"}]}";
+        }
+
+        private static void CheckUpdates(string root, string output)
+        {
+            var package = Encoding.UTF8.GetBytes("PK generated update package fixture");
+            string stable = ReleaseJson("v1.3.0", package, false, false);
+            string preview = ReleaseJson("v1.4.0", package, false, true);
+            string draft = ReleaseJson("v8.0.0", package, true, false);
+            byte[] json = Encoding.UTF8.GetBytes("[" + stable + "," + draft + "," + preview + "]");
+            var release = Updates.Parse(json, Updates.CurrentVersion);
+            Check(release.Tag == "v1.4.0" && release.Prerelease, "Update checks select the highest published version including prereleases, skipping drafts");
+            Check(Updates.Parse(json, new Version(1, 4, 0)) == null, "Equal and older release versions do not prompt for updates");
+            Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + stable.Replace("github.com/jiuyang5354", "github.com/other-owner") + "]"), Updates.CurrentVersion) == null,
+                "A package URL outside the publishing repository is rejected");
+            Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + stable.Replace("sha256:", "sha1:") + "]"), Updates.CurrentVersion) == null,
+                "Packages without a complete SHA-256 digest are not offered for download");
+            var settings = new Settings();
+            var now = DateTime.UtcNow;
+            Check(Updates.Due(settings, now), "New installations enable an initial background update check");
+            settings.UpdateCheckedUtcTicks = now.Ticks;
+            Check(!Updates.Due(settings, now.AddHours(23)) && Updates.Due(settings, now.AddHours(24)),
+                "Automatic update checks are limited to once per 24 hours across restarts");
+            settings.AutoCheckUpdates = false;
+            Check(!Updates.Due(settings, now.AddDays(3)), "Disabling automatic checks prevents scheduled network requests");
+            var legacy = new ImageStore(Path.Combine(root, "legacy-settings")).Settings;
+            Check(legacy.AutoCheckUpdates && !legacy.CollectionPaused, "Older settings gain update checks while keeping collection active");
+
+            var handler = new UpdateHandler { Json = json, Package = package };
+            using (var updater = new Updates(handler))
+            {
+                var found = updater.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
+                Check(found.Tag == "v1.4.0" && handler.Headers, "HTTP update pipeline sends an app user-agent without an account token");
+                string destination = Path.Combine(root, "更新 包.zip");
+                updater.DownloadAsync(found, destination, null, CancellationToken.None).GetAwaiter().GetResult();
+                Check(File.ReadAllBytes(destination).SequenceEqual(package), "Verified downloads arrive intact at a Unicode destination");
+                handler.Package = Enumerable.Repeat((byte)42, package.Length).ToArray();
+                bool rejected = false;
+                try { updater.DownloadAsync(found, destination, null, CancellationToken.None).GetAwaiter().GetResult(); }
+                catch (IOException) { rejected = true; }
+                Check(rejected && File.ReadAllBytes(destination).SequenceEqual(package) && Directory.GetFiles(root, "*.download").Length == 0,
+                    "Checksum failures preserve existing files and remove incomplete download files");
+                handler.Package = new byte[package.Length - 1];
+                rejected = false;
+                try { updater.DownloadAsync(found, destination, null, CancellationToken.None).GetAwaiter().GetResult(); }
+                catch (IOException) { rejected = true; }
+                Check(rejected && File.ReadAllBytes(destination).SequenceEqual(package), "Truncated downloads are rejected without replacing a saved package");
+                using (var cancel = new CancellationTokenSource())
+                {
+                    cancel.Cancel();
+                    rejected = false;
+                    try { updater.DownloadAsync(found, destination, null, cancel.Token).GetAwaiter().GetResult(); }
+                    catch (OperationCanceledException) { rejected = true; }
+                    Check(rejected && Directory.GetFiles(root, "*.download").Length == 0, "Cancelled downloads leave no temporary update files");
+                }
+                handler.Status = HttpStatusCode.Forbidden;
+                rejected = false;
+                try { updater.CheckAsync(CancellationToken.None).GetAwaiter().GetResult(); }
+                catch (HttpRequestException) { rejected = true; }
+                Check(rejected, "HTTP access errors are returned without a false update result");
+            }
+
+            var automatic = new UpdateHandler { Json = json, Package = package };
+            string autoRoot = Path.Combine(root, "automatic-updates");
+            using (var controller = new Controller(autoRoot, false, new Updates(automatic)))
+            {
+                var timer = (DispatcherTimer)typeof(Controller).GetField("updateTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(controller);
+                var tray = (Forms.NotifyIcon)typeof(Controller).GetField("tray", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(controller);
+                tray.ContextMenuStrip.Show(new System.Drawing.Point(30, 30));
+                Pump(100);
+                var menuItems = tray.ContextMenuStrip.Items.OfType<Forms.ToolStripMenuItem>().ToArray();
+                Check(menuItems.Any(item => item.Text == "复制最近一张" && !item.Enabled) &&
+                    menuItems.Any(item => item.Text == "暂停所有自动收集" && !item.Checked) &&
+                    menuItems.Any(item => item.Text == "自动检查更新（含预发布）" && item.Checked) &&
+                    menuItems.Any(item => item.Text == "开机启动" && !item.Checked),
+                    "The actual tray menu exposes convenience controls with auto-check enabled and optional startup disabled");
+                using (var image = new System.Drawing.Bitmap(tray.ContextMenuStrip.Width, tray.ContextMenuStrip.Height))
+                {
+                    tray.ContextMenuStrip.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, image.Width, image.Height));
+                    image.Save(Path.Combine(output, "tray-menu.png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+                tray.ContextMenuStrip.Close();
+                controller.Welcome();
+                timer.Interval = TimeSpan.FromMilliseconds(100);
+                Pump(400);
+                var saved = new ImageStore(autoRoot).Settings;
+                Check(automatic.Calls == 1 && saved.UpdateNotifiedTag == release.Tag && tray.ContextMenuStrip.Items.OfType<Forms.ToolStripMenuItem>().Any(item => item.Text == "更新到 " + release.Tag + "…"),
+                    "The real background timer persists a version reminder and exposes the download entry in the tray");
+                timer.Interval = TimeSpan.FromMilliseconds(100);
+                Pump(350);
+                Check(automatic.Calls == 1, "The scheduler does not repeat a recent version check or reminder");
+                controller.SetAutoUpdates(false);
+                controller.Store.Settings.UpdateCheckedUtcTicks = 0;
+                timer.Interval = TimeSpan.FromMilliseconds(100);
+                Pump(350);
+                Check(automatic.Calls == 1, "The live scheduler stays offline after automatic checks are disabled");
+            }
+            using (var dialog = new UpdateDialog(release, delegate { return Task.FromResult(0); }, delegate { }))
+            using (var timer = new Forms.Timer { Interval = 150 })
+            {
+                timer.Tick += delegate {
+                    timer.Stop();
+                    using (var image = new System.Drawing.Bitmap(dialog.Width, dialog.Height))
+                    {
+                        dialog.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, dialog.Width, dialog.Height));
+                        image.Save(Path.Combine(output, "update-dialog.png"), System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                    dialog.Controls.OfType<Forms.Button>().Single(button => button.Text == "稍后").PerformClick();
+                };
+                timer.Start();
+                Check(dialog.ShowDialog() == Forms.DialogResult.Cancel, "The actual update dialog shows release notes and can be dismissed without downloading");
+            }
+        }
+
+        private static int CheckNetwork(string output)
+        {
+            Directory.CreateDirectory(output);
+            try
+            {
+                Release release;
+                using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20), MaxResponseContentBufferSize = 1024 * 1024 })
+                {
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd("Snapline-QA/" + Updates.CurrentVersion);
+                    release = Updates.Parse(http.GetByteArrayAsync(Updates.Feed).GetAwaiter().GetResult(), new Version(0, 0, 0));
+                }
+                Check(release != null, "Anonymous HTTPS retrieves a valid published update feed");
+                using (var updater = new Updates())
+                {
+                    var available = updater.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
+                    Check(release.Version > Updates.CurrentVersion ? available != null && available.Tag == release.Tag : available == null,
+                        "The actual app HTTP client correctly compares the public release with its own version");
+                    string path = Path.Combine(output, release.Package.Name);
+                    updater.DownloadAsync(release, path, null, CancellationToken.None).GetAwaiter().GetResult();
+                    Check(File.Exists(path) && new FileInfo(path).Length == release.Package.Size,
+                        "The actual app downloads and SHA-256-verifies the public GitHub release package without an account");
+                    Check(Directory.GetFiles(output, "*.download").Length == 0, "A real completed download leaves no incomplete files");
+                }
+                File.WriteAllLines(Path.Combine(output, "network-results.txt"), checks);
+                Console.WriteLine("PASS " + checks.Count + " real network checks.");
+                return 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         }
 
         private static uint FreeHotkey(uint modifiers)

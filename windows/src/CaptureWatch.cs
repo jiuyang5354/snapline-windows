@@ -62,14 +62,17 @@ namespace Snapline
 
         private void Queue(string path)
         {
-            if (!ImageStore.IsImage(path)) return;
-            dispatcher.BeginInvoke(new Action(delegate { if (!pending.ContainsKey(path)) pending[path] = 0; }));
+            if (!ImageStore.IsImage(path) || store.Settings.CollectionPaused) return;
+            dispatcher.BeginInvoke(new Action(delegate { if (!store.Settings.CollectionPaused && !pending.ContainsKey(path)) pending[path] = 0; }));
         }
+
+        internal void DiscardPending() { pending.Clear(); }
 
         private int ticks;
         private void Tick(object sender, EventArgs args)
         {
             if (++ticks % 15 == 0) { TryWatchScreenshots(); store.Prune(); }
+            if (store.Settings.CollectionPaused) { pending.Clear(); return; }
             foreach (var path in pending.Keys.ToArray())
             {
                 try

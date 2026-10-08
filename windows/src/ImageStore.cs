@@ -18,12 +18,17 @@ namespace Snapline
         [DataMember] public List<string> Paths = new List<string>();
         [DataMember] public uint HotkeyKey = Hotkey.DefaultKey;
         [DataMember] public uint HotkeyModifiers = Hotkey.DefaultModifiers;
+        [DataMember] public bool CollectionPaused;
+        [DataMember] public bool AutoCheckUpdates = true;
+        [DataMember] public long UpdateCheckedUtcTicks;
+        [DataMember] public string UpdateNotifiedTag;
 
         [OnDeserializing]
         private void HotkeyDefaults(StreamingContext context)
         {
             HotkeyKey = Hotkey.DefaultKey;
             HotkeyModifiers = Hotkey.DefaultModifiers;
+            AutoCheckUpdates = true;
         }
     }
 

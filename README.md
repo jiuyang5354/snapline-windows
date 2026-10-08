@@ -4,7 +4,7 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的**非�
 
 An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# / WPF and Win32. This project uses its own name and icon and is not endorsed by the upstream author.
 
-**当前版本为 v1.1.0 预发布，新增自定义快捷键。** 发布前自动检查 58 / 58 通过；不同物理显示器的缩放、真实鼠标手势、具体软件的拖放接收和全屏应用体验仍需人工检查。请阅读 [验证记录](windows/QA.md)。
+**当前版本为 v1.2.0 预发布，新增更新提醒、校验下载、暂停收集、快速复制和可选开机启动。** 自动检查 90 / 90 通过；不同物理显示器的缩放、真实鼠标手势、具体软件的拖放接收和全屏应用体验仍需人工检查。请阅读 [验证记录](windows/QA.md)。
 
 ![Snapline Windows 窗口预览](docs/preview.png)
 
@@ -12,9 +12,9 @@ An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# 
 
 ## 下载和运行
 
-- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.1.0/Snapline-Windows-v1.1.0.zip)
-- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.1.0/Snapline-Windows-Source-v1.1.0.zip)
-- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.1.0)
+- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.0/Snapline-Windows-v1.2.0.zip)
+- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.2.0/Snapline-Windows-Source-v1.2.0.zip)
+- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.2.0)
 
 目标系统为 **Windows 10 / 11，需 .NET Framework 4.8 或更高版本**。解压整个便携包，双击其中的 `Snapline.exe`。程序不需要管理员权限；运行后驻留系统托盘，图标也可能在“隐藏图标”菜单中。
 
@@ -37,14 +37,30 @@ An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# 
 
 单键会占用其他应用中的同名按键；绑定字母或数字时建议使用组合键。修饰键须搭配普通按键，F12 为系统保留键。已被占用或无法注册的组合会提示原因并保留原快捷键。如果重启时保存的组合被其他软件占用，程序会提示并尝试默认和备用组合，保存的偏好仍保留。
 
+## 更新与便捷操作
+
+右键系统托盘中的 Snapline 图标，可使用以下操作：
+
+| 功能 | 使用与默认状态 |
+| --- | --- |
+| 自动检查更新（含预发布） | 默认开启。启动约 15 秒后检查，之后每 24 小时最多检查一次；同一版本只提醒一次。可关闭，手动检查仍可用。 |
+| 检查更新 / 更新到新版本 | 查看更新说明、选择保存位置、下载并校验便携 ZIP。通知不可见时也可从托盘打开。另有“打开版本发布页”入口。 |
+| 暂停所有自动收集 | 同时暂停剪贴板图片和文件夹新图片，重启后保持暂停。取消勾选后恢复，跳过暂停期间的图片。已有图片仍可复制、预览，也可手动挂入。 |
+| 复制最近一张 | 无须展开晾衣绳，直接复制当前列表最近一张图片；没有图片时禁用。 |
+| 开机启动 | 默认关闭，仅在勾选后设置当前 Windows 用户登录时启动，不需要管理员权限。移动或重新解压程序后请重新勾选，以更新路径。 |
+
+**v1.0 / v1.1 用户需要先手动下载一次 v1.2.0。** 下载后从托盘退出旧版，解压整个新版文件夹并运行 `Snapline.exe`。之后即可收到更新提醒；截图、列表及自定义快捷键保存在原来的数据目录，会继续使用。当前提供自动检查、提醒和点击下载，安装更新需退出旧版并解压运行。
+
+更新仅读取本仓库公开的版本文件，并在点击下载时访问 GitHub 发布包。程序校验包的大小与 SHA-256，下载取消、失败或校验不通过时不会替换已保存的包。离线检查静默失败，手动检查会提示；不需要登录 GitHub。
+
 ## 使用注意事项
 
 - **默认收集剪贴板中的图片，不仅是截图。** 从聊天、浏览器或其他应用复制的图片也会被保存。可在托盘关闭“收集剪贴板图片”，改为只监听指定文件夹；文字剪贴板不会保存。
 - 收集的图片默认保存在 `%LOCALAPPDATA%\Snapline\Inbox`，设置在 `%LOCALAPPDATA%\Snapline\settings.json`。最多恢复最近 12 张，超出展示数量的旧文件仍会保留，需要自行按需清理。
 - 点击图片叉号会把程序收件夹内的图片送入回收站；外部图片只从展示列表取下，保留原文件。“全部取下”保留文件。
 - 拖放时由目标应用决定接收图片或文件，以及复制或移动。使用移动操作后，原文件可能离开原文件夹。
-- 程序本身不发送网络请求，也没有账号或遥测。Windows 剪贴板同步及接收图片的其他应用仍按各自设置处理数据。
-- 程序不接管系统截图快捷键、不修改截图工具的自动保存设置，也不自动设置开机启动。
+- 更新检查会向 `raw.githubusercontent.com` 请求本仓库的公开版本文件；点击下载会访问 GitHub 与其发布文件 CDN。请求包含程序版本，不上传截图、剪贴板内容或本地路径，也没有账号或遥测。关闭自动检查后，仅主动检查或下载时才联网。Windows 剪贴板同步及接收图片的其他应用仍按各自设置处理数据。
+- 程序不接管系统截图快捷键，不修改截图工具的自动保存设置。开机启动默认关闭，可在托盘开启或关闭；便携程序移动后需更新注册路径。
 - 透明外框使用 WPF 半透明效果，与 macOS 原生模糊材质有差异。预发布验证范围以 [QA.md](windows/QA.md) 为准。
 
 ## 编译
@@ -65,6 +81,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\package.ps1
 ```
 
 测试会临时使用系统剪贴板，结束时恢复能读取的原格式；测试期间请暂停复制操作。测试图片与状态使用 `windows/qa/output/` 中的独立目录。
+
+维护发布时，`package.ps1` 根据 EXE 版本生成 ZIP、`SHA256SUMS.txt` 与 `windows/dist/update.json`。先上传并核对发布文件，再将该版本文件复制至仓库根目录的 `update.json` 并推送，避免客户端提示尚未完成上传的版本。版本文件的 `prerelease` 应与 GitHub Release 的状态一致。
 
 ## 原作者与许可
 

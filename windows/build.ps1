@@ -8,7 +8,7 @@ $binaryRoot = Join-Path $projectRoot 'bin'
 New-Item -ItemType Directory -Force -Path $binaryRoot | Out-Null
 $iconPath = Join-Path $projectRoot 'Snapline.ico'
 if (-not (Test-Path -LiteralPath $iconPath)) { & (Join-Path $projectRoot 'make-icon.ps1') }
-$references = @('System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Runtime.Serialization.dll', 'System.Xaml.dll', 'Microsoft.VisualBasic.dll') |
+$references = @('System.dll', 'System.Core.dll', 'System.Net.Http.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Runtime.Serialization.dll', 'System.Xaml.dll', 'Microsoft.VisualBasic.dll') |
     ForEach-Object { '/reference:' + (Join-Path $frameworkRoot $_) }
 $references += @('WindowsBase.dll', 'PresentationCore.dll', 'PresentationFramework.dll') |
     ForEach-Object { '/reference:' + (Join-Path $frameworkRoot ('WPF\' + $_)) }
