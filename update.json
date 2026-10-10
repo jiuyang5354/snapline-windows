@@ -1,16 +1,16 @@
 [
   {
-    "tag_name": "v1.3.0",
+    "tag_name": "v1.3.1",
     "draft": false,
     "prerelease": true,
-    "body": "# Snapline v1.3.0 · 新截图栏与统一设置 Windows 预发布\n\nSnapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 移植版。原作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**；Windows 实现由 **jiuyang5354** 发布。使用独立名称与图标，不代表原作者背书。完整声明和 MIT 许可随包保留。\n\n## 本次更新\n\n- 新版顶部截图栏：暖白、石墨灰和橙色；保留晾衣绳与夹子，横竖图片保持比例，卡片显示文件名称与修改时间。\n- 工具条直接提供复制最近一张、暂停/恢复全部自动收集和设置入口，显示当前状态与截图数量；窄屏改为图标按钮，空白区域仍可穿透鼠标。\n- 统一原生 WPF 设置窗口，包含常规、快捷键、存储、关于四页；保存后应用偏好，取消保留原值，快捷键冲突与错误就地提示。\n- 保留单击复制、双击预览、长按画图编辑、拖出使用、文件夹监听、全局自定义快捷键、自动检查更新和 SHA-256 校验下载。\n- 保留可选开机启动，默认关闭；顶部显示和复制不会修改开机启动设置。\n\n## 下载与升级\n\n- **Snapline-Windows-Setup-v1.3.0.exe**：中文 EXE 安装包，桌面快捷方式默认勾选，可取消；开始菜单与卸载入口同时提供，只安装给当前用户。\n- **Snapline-Windows-v1.3.0.zip**：便携版，解压整个文件夹后运行 Snapline.exe。\n- **Snapline-Windows-Source-v1.3.0.zip**：可编译源码，包括界面 XAML、构建与验证脚本。\n- **Snapline-Windows-Installer-Source-v1.3.0.zip**：安装器源码与验证记录。\n- **SHA256SUMS.txt / SHA256SUMS-Setup.txt**：对应下载包的 SHA-256 校验值。\n\n目标系统为 Windows 10 / 11 + .NET Framework 4.8 或更高。无需 Python、Node.js 或管理员权限；当前二进制未作代码签名。\n\n升级前从托盘退出旧版，再运行安装包，或将便携 ZIP 解压到新目录。默认的截图与设置目录不变；使用自定义 `--data-dir` 时请继续带上同一目录。v1.2.1 用户可以收到本次更新提醒；下载后仍需手动安装或解压运行。\n\n## 使用注意事项\n\n- 默认收集剪贴板里的所有图片，无法保证只收集截图；可在常规设置中关闭。截图默认保存到 `%LOCALAPPDATA%\\Snapline\\Inbox`，无需账户，不上传图片或本地路径。\n- 最多恢复最近 12 张记录，超出展示数量的旧文件仍保留。卡片叉号会把收件夹里的图片送入回收站；外部原文件只取下。“全部取下”保留文件且立即执行。\n- 单键会占用其他应用中的同名按键；字母或数字建议使用组合键。F12 是 Windows 保留键，已占用的组合会提示并保留原绑定。\n- 拖放的图片/文件格式以及复制/移动方式由目标应用决定。自动更新检查会联网，可关闭；不会自动覆盖安装。\n- 本机已验证真实 WPF 窗口、剪贴板、快捷键、设置保存与失败回滚、透明窗口命中和安装包。独立 Windows 10 / 32 位、物理多屏、实体键盘完整组合及具体软件拖放仍需人工验收，保持预发布状态。详见 [QA.md](https://github.com/jiuyang5354/snapline-windows/blob/main/windows/QA.md)。\n",
+    "body": "# Snapline v1.3.1 · 安装版直接覆盖升级 Windows 预发布\n\nSnapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 移植版。原作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**；Windows 实现由 **jiuyang5354** 发布。使用独立名称与图标，不代表原作者背书。完整声明和 MIT 许可随包保留。\n\n## 本次更新\n\n- 安装包默认沿用旧版登记的安装目录，包括自定义位置，不必先卸载。\n- 替换前正常退出该安装位置的旧版进程；其他目录的便携副本不关闭或覆盖。无法退出时提示重试或取消。\n- 原位置覆盖时保留截图、设置、开机启动项和已有快捷方式的自定义数据目录参数，应用列表只更新原有登记。\n- 保留新版顶部截图栏：暖白、石墨灰和橙色；晾衣绳与夹子、横竖图片比例、文件名称与修改时间继续使用。\n- 工具条直接提供复制最近一张、暂停/恢复全部自动收集和设置入口，显示当前状态与截图数量；窄屏改为图标按钮，空白区域仍可穿透鼠标。\n- 保留统一原生 WPF 设置窗口，包含常规、快捷键、存储、关于四页；保存后应用偏好，取消保留原值，快捷键冲突与错误就地提示。\n- 保留单击复制、双击预览、长按画图编辑、拖出使用、文件夹监听、全局自定义快捷键、自动检查更新和 SHA-256 校验下载。\n- 保留可选开机启动，默认关闭；顶部显示和复制不会修改开机启动设置。\n\n## 下载与升级\n\n- **Snapline-Windows-Setup-v1.3.1.exe**：中文 EXE 安装包，桌面快捷方式默认勾选，可取消；开始菜单与卸载入口同时提供，只安装给当前用户。\n- **Snapline-Windows-v1.3.1.zip**：便携版，解压整个文件夹后运行 Snapline.exe。\n- **Snapline-Windows-Source-v1.3.1.zip**：可编译源码，包括界面 XAML、构建与验证脚本。\n- **Snapline-Windows-Installer-Source-v1.3.1.zip**：安装器源码与验证记录。\n- **SHA256SUMS.txt / SHA256SUMS-Setup.txt**：对应下载包的 SHA-256 校验值。\n\n目标系统为 Windows 10 / 11 + .NET Framework 4.8 或更高。无需 Python、Node.js 或管理员权限；当前二进制未作代码签名。\n\n安装版直接运行新版 EXE，默认在原目录覆盖；安装器会先正常退出该位置的旧版。便携版没有安装登记，需要先退出，再解压运行。默认截图与设置目录不变，原位置的快捷方式和开机启动参数保留；新建快捷方式使用自定义 `--data-dir` 时请继续带上原目录。程序内更新仍提供提醒与校验下载，不会在后台自动安装。\n\n## 使用注意事项\n\n- 默认收集剪贴板里的所有图片，无法保证只收集截图；可在常规设置中关闭。截图默认保存到 `%LOCALAPPDATA%\\Snapline\\Inbox`，无需账户，不上传图片或本地路径。\n- 最多恢复最近 12 张记录，超出展示数量的旧文件仍保留。卡片叉号会把收件夹里的图片送入回收站；外部原文件只取下。“全部取下”保留文件且立即执行。\n- 单键会占用其他应用中的同名按键；字母或数字建议使用组合键。F12 是 Windows 保留键，已占用的组合会提示并保留原绑定。\n- 拖放的图片/文件格式以及复制/移动方式由目标应用决定。自动更新检查会联网，可关闭；不会自动覆盖安装。\n- 本机已验证真实 WPF 窗口、剪贴板、快捷键、设置保存与失败回滚、透明窗口命中和安装包。独立 Windows 10 / 32 位、物理多屏、实体键盘完整组合及具体软件拖放仍需人工验收，保持预发布状态。详见 [QA.md](https://github.com/jiuyang5354/snapline-windows/blob/main/windows/QA.md)。\n",
     "assets": [
       {
-        "name": "Snapline-Windows-v1.3.0.zip",
+        "name": "Snapline-Windows-v1.3.1.zip",
         "state": "uploaded",
-        "size": 135902,
-        "digest": "sha256:b34973a5eeefedb4fe1e4022efe9921f585c9338d1e2d69c5e075bd5ebc14a46",
-        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.0/Snapline-Windows-v1.3.0.zip"
+        "size": 136470,
+        "digest": "sha256:2707e57da22aa24e2674a708a4a9a47fb9b4746bf24173541dbc1000acf06b4f",
+        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.1/Snapline-Windows-v1.3.1.zip"
       }
     ]
   }
