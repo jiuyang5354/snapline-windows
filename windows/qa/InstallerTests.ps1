@@ -19,8 +19,9 @@ function Check([bool]$ok, [string]$name) {
     if (-not $ok) { throw ('FAIL: ' + $name) }
     Write-Output ('PASS: ' + $name)
 }
-function Install([string[]]$options = @()) {
-    $arguments = @('/S') + $options + ('/D=' + $installDir)
+function Install([string[]]$options = @(), [bool]$useRegisteredDirectory = $false) {
+    $arguments = @('/S') + $options
+    if (-not $useRegisteredDirectory) { $arguments += '/D=' + $installDir }
     $process = Start-Process -FilePath $Installer -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
     Check ($process.ExitCode -eq 0) 'Actual QA installer exits successfully'
 }
@@ -42,8 +43,12 @@ function VerifyShortcut([string]$path, [string]$target) {
 New-Item -ItemType Directory -Force -Path (Join-Path $dataDir 'Inbox'), $installDir | Out-Null
 $settingsPath = Join-Path $dataDir 'settings.json'
 $imagePath = Join-Path $dataDir 'Inbox\retained.png'
-[System.IO.File]::WriteAllText($settingsPath, '{"CollectionPaused":true,"HotkeyKey":119}')
-[System.IO.File]::WriteAllBytes($imagePath, [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII='))
+Add-Type -AssemblyName System.Drawing
+$image = New-Object System.Drawing.Bitmap(2, 2)
+try { $image.SetPixel(0, 0, [Drawing.Color]::OrangeRed); $image.Save($imagePath, [Drawing.Imaging.ImageFormat]::Png) }
+finally { $image.Dispose() }
+$settings = [ordered]@{ CollectionPaused=$true; ListenClipboard=$false; AutoCheckUpdates=$false; WatchFolder=''; HotkeyKey=119; HotkeyModifiers=3; Paths=@($imagePath) }
+[System.IO.File]::WriteAllText($settingsPath, (ConvertTo-Json -InputObject $settings -Compress))
 $settingsHash = (Get-FileHash -LiteralPath $settingsPath).Hash
 $imageHash = (Get-FileHash -LiteralPath $imagePath).Hash
 $foreignFile = Join-Path $installDir 'user-file-keep.txt'
@@ -75,7 +80,60 @@ Check ($uninstallRegistration.QuietUninstallString -eq ($uninstallRegistration.U
 Check ($uninstallRegistration.InstallLocation -eq $installDir) 'Uninstall registration points to the installed directory'
 Check (-not (Test-Path -LiteralPath $testRunKey)) 'Installation does not enable startup'
 New-Item -Path $testRunKey -Force | Out-Null
-New-ItemProperty -LiteralPath $testRunKey -Name Snapline -Value ('"' + (Join-Path $installDir 'Snapline.exe') + '" --data-dir "' + $dataDir + '"') -PropertyType String -Force | Out-Null
+$startupValue = '"' + (Join-Path $installDir 'Snapline.exe') + '" --data-dir "' + $dataDir + '"'
+New-ItemProperty -LiteralPath $testRunKey -Name Snapline -Value $startupValue -PropertyType String -Force | Out-Null
+$shortcutArguments = '--data-dir "' + $dataDir + '"'
+foreach ($path in @($desktopLink, $menuLink)) { $shortcut = $shell.CreateShortcut($path); $shortcut.Arguments = $shortcutArguments; $shortcut.Save() }
+$desktopHash = (Get-FileHash -LiteralPath $desktopLink).Hash
+$menuHash = (Get-FileHash -LiteralPath $menuLink).Hash
+
+$previousZip = Join-Path (Split-Path $PSScriptRoot -Parent) 'Snapline-Windows-v1.3.0.zip'
+Check ((Get-FileHash -LiteralPath $previousZip -Algorithm SHA256).Hash.ToLowerInvariant() -eq 'b34973a5eeefedb4fe1e4022efe9921f585c9338d1e2d69c5e075bd5ebc14a46') 'Upgrade fixture is the publicly released v1.3.0 portable package'
+$previousRoot = Join-Path $Root 'Previous Portable'
+Expand-Archive -LiteralPath $previousZip -DestinationPath $previousRoot -Force
+$oldExecutable = Join-Path $previousRoot 'Snapline\Snapline.exe'
+$oldVersion = [Reflection.AssemblyName]::GetAssemblyName($oldExecutable).Version
+$newVersion = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $Payload 'Snapline.exe')).Version
+Check ($oldVersion -lt $newVersion) 'Upgrade fixture has an older executable version than the new payload'
+Copy-Item -LiteralPath $oldExecutable -Destination (Join-Path $installDir 'Snapline.exe') -Force
+$otherDir = Join-Path $Root 'Other Portable'
+$secondData = Join-Path $Root 'Second Data'
+$otherData = Join-Path $Root 'Other Data'
+New-Item -ItemType Directory -Force -Path $otherDir, $secondData, $otherData | Out-Null
+Copy-Item -LiteralPath $oldExecutable -Destination (Join-Path $otherDir 'Snapline.exe') -Force
+Copy-Item -LiteralPath (Join-Path $Payload 'Snapline.exe.config') -Destination $otherDir -Force
+foreach ($directory in @($secondData, $otherData)) { Copy-Item -LiteralPath $settingsPath -Destination (Join-Path $directory 'settings.json') -Force }
+$oldProcesses = @()
+$otherProcess = $null
+try {
+    foreach ($directory in @($dataDir, $secondData)) {
+        $oldProcesses += Start-Process -FilePath (Join-Path $installDir 'Snapline.exe') -ArgumentList ('--data-dir "' + $directory + '"') -WindowStyle Hidden -PassThru
+        $oldProcesses[-1].WaitForInputIdle(5000) | Out-Null
+        Check (-not $oldProcesses[-1].HasExited) 'Released old executable starts from the registered installation directory'
+    }
+    $otherProcess = Start-Process -FilePath (Join-Path $otherDir 'Snapline.exe') -ArgumentList ('--data-dir "' + $otherData + '"') -WindowStyle Hidden -PassThru
+    $otherProcess.WaitForInputIdle(5000) | Out-Null
+    Check (-not $otherProcess.HasExited) 'A separate portable copy is running during the upgrade'
+    Install @() $true
+    foreach ($process in $oldProcesses) { Check ($process.WaitForExit(5000) -and $process.ExitCode -eq 0) 'Upgrade gracefully exits a running old instance before replacing its executable' }
+    Check (-not $otherProcess.HasExited) 'Upgrade leaves the running portable copy in another directory alone'
+    Check ((Get-FileHash -LiteralPath (Join-Path $otherDir 'Snapline.exe')).Hash -eq (Get-FileHash -LiteralPath $oldExecutable).Hash) 'Upgrade does not overwrite another portable copy'
+    Check (-not (Test-Path -LiteralPath (Join-Path $Root 'Default Install'))) 'Upgrade automatically reuses the registered custom installation directory'
+    Check ((Get-FileHash -LiteralPath (Join-Path $installDir 'Snapline.exe')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Payload 'Snapline.exe')).Hash) 'Upgrade replaces the old executable with the verified new payload'
+    $registration = Get-ItemProperty -LiteralPath $testAppKey
+    Check ($registration.InstallLocation -eq $installDir -and $registration.DisplayVersion -eq $newVersion.ToString(3)) 'Upgrade updates one application registration at the original location'
+    VerifyShortcut $desktopLink (Join-Path $installDir 'Snapline.exe')
+    VerifyShortcut $menuLink (Join-Path $installDir 'Snapline.exe')
+    Check ((Get-FileHash -LiteralPath $desktopLink).Hash -eq $desktopHash -and (Get-FileHash -LiteralPath $menuLink).Hash -eq $menuHash) 'In-place upgrade preserves existing shortcut files and their custom data-dir arguments'
+    Check (@(Get-ChildItem -LiteralPath (Join-Path $Root 'Desktop') -Filter 'Snapline*.lnk').Count -eq 1) 'Upgrade keeps a single desktop shortcut'
+    Check ((Get-ItemProperty -LiteralPath $testRunKey -Name Snapline).Snapline -eq $startupValue) 'Upgrade preserves the enabled startup command and its custom data directory'
+    Check ((Get-FileHash -LiteralPath $settingsPath).Hash -eq $settingsHash -and (Get-FileHash -LiteralPath $imagePath).Hash -eq $imageHash) 'Running-instance upgrade preserves screenshots and custom settings byte for byte'
+    Check (Test-Path -LiteralPath $foreignFile) 'Upgrade preserves unrelated files in the original installation directory'
+} finally {
+    foreach ($process in @($oldProcesses) + @($otherProcess)) {
+        if ($null -ne $process) { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit(5000) | Out-Null }; $process.Dispose() }
+    }
+}
 Uninstall
 Check (-not (Test-Path -LiteralPath $desktopLink)) 'Uninstall removes the desktop shortcut it created'
 Check (-not (Test-Path -LiteralPath $menuLink)) 'Uninstall removes its Start Menu shortcuts'
@@ -103,7 +161,8 @@ Check ($startupBefore -eq $startupAfter) 'QA install and uninstall do not change
 $actualDesktopAfter = if (Test-Path -LiteralPath $actualDesktopLink) { (Get-FileHash -LiteralPath $actualDesktopLink).Hash } else { '' }
 Check ($actualDesktopBefore -eq $actualDesktopAfter) 'QA does not create or modify the real desktop shortcut'
 $report = [ordered]@{
-    scope='Actual install and uninstall with redirected shortcuts and private test registry keys.'
+    scope='Actual install, running v1.3.0 upgrade and uninstall with redirected shortcuts and private test registry keys.'
+    previousVersion=$oldVersion.ToString(3)
     productionInstaller=[System.IO.Path]::GetFileName($ProductionInstaller)
     productionSHA256=(Get-FileHash -LiteralPath $ProductionInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
     allPassed=$true

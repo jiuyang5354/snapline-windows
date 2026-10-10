@@ -4,7 +4,7 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的**非�
 
 An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# / WPF and Win32. This project uses its own name and icon and is not endorsed by the upstream author.
 
-**当前版本为 v1.3.0 预发布，采用新版截图栏与统一设置窗口。** 顶部可直接复制最近一张、暂停/恢复收集和打开设置；原有截图、拖放、更新与快捷键能力保留。本机自动检查 110 / 110 通过；不同物理显示器的缩放、真实鼠标手势、具体软件的拖放接收和全屏应用体验仍需人工检查。请阅读 [验证记录](windows/QA.md)。
+**当前版本为 v1.3.1 预发布，安装版支持直接覆盖升级。** 安装器默认沿用旧版安装目录，正常退出该位置的旧程序并覆盖程序文件，保留截图、设置和已有快捷方式。新版截图栏与统一设置窗口继续提供原有功能，本机程序检查 110 / 110 通过；完整范围见 [验证记录](windows/QA.md)。
 
 ![Snapline Windows 窗口预览](docs/preview.png)
 
@@ -16,15 +16,15 @@ An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# 
 
 ## 下载和运行
 
-- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.0/Snapline-Windows-Setup-v1.3.0.exe)
-- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.0/Snapline-Windows-v1.3.0.zip)
-- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.0/Snapline-Windows-Source-v1.3.0.zip)
-- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.0/Snapline-Windows-Installer-Source-v1.3.0.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.0/SHA256SUMS-Setup.txt)
-- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.3.0)
+- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.1/Snapline-Windows-Setup-v1.3.1.exe)
+- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.1/Snapline-Windows-v1.3.1.zip)
+- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.1/Snapline-Windows-Source-v1.3.1.zip)
+- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.1/Snapline-Windows-Installer-Source-v1.3.1.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.3.1/SHA256SUMS-Setup.txt)
+- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.3.1)
 
 **安装版：** 双击 EXE，按中文向导安装。“创建桌面快捷方式”默认勾选，可取消；同时提供开始菜单入口和卸载入口。默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，只安装给当前用户，不需要管理员权限。开机启动默认关闭。卸载保留原来的截图和设置，完整说明见 [安装版指南](windows/INSTALLER.zh-CN.md)。
 
-另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，当前 NuGet 版本为 `1.3.0-preview`，已公开并关联本仓库。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
+另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，当前 NuGet 版本为 `1.3.1-preview`，已公开并关联本仓库。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
 
 目标系统为 **Windows 10 / 11，需 .NET Framework 4.8 或更高版本**。解压整个便携包，双击其中的 `Snapline.exe`。程序不需要管理员权限；运行后驻留系统托盘，图标也可能在“隐藏图标”菜单中。
 
@@ -60,7 +60,7 @@ An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# 
 | 复制最近一张 | 无须展开晾衣绳，直接复制当前列表最近一张图片；没有图片时禁用。 |
 | 开机启动 | 默认关闭，仅在勾选后设置当前 Windows 用户登录时启动，不需要管理员权限。移动或重新解压程序后请重新勾选，以更新路径。 |
 
-**升级到 v1.3.0：** 已安装 v1.2.1 的用户会收到更新提醒，也可直接下载本页的 EXE 安装包。安装前从托盘退出旧版，再运行安装包；便携用户解压整个新版文件夹并运行 `Snapline.exe`。截图、列表及自定义快捷键保存在原来的数据目录，会继续使用。当前提供自动检查、提醒和点击下载，安装更新需退出旧版并解压运行。
+**升级到 v1.3.1：** 已用 EXE 安装的用户直接运行新版安装包即可，默认在原目录覆盖，旧进程正常退出后再替换文件，应用列表保留一份登记；已有快捷方式的自定义数据目录参数与开机启动项保留。便携版没有安装登记，需先退出旧版，再将新版解压到选定目录。截图、列表及自定义快捷键仍在原数据目录。程序内自动更新继续提供检查、提醒与便携 ZIP 下载，也可从发布页选择 EXE 安装包。
 
 更新仅读取本仓库公开的版本文件，并在点击下载时访问 GitHub 发布包。程序校验包的大小与 SHA-256，下载取消、失败或校验不通过时不会替换已保存的包。离线检查静默失败，手动检查会提示；不需要登录 GitHub。
 

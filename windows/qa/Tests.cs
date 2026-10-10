@@ -85,7 +85,12 @@ namespace Snapline
                 Check(pixels[3] == 255 && pixels[7] == 255 && pixels[0] == 10, "Legacy zero-alpha clipboard bitmaps stay visible");
 
                 // Live WPF/Win32 checks: hidden message window, real clipboard, real overlay.
-                controller = new Controller(Path.Combine(root, "live"), false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
+                string liveRoot = Path.Combine(root, "live");
+                var liveSettings = new ImageStore(liveRoot);
+                liveSettings.Settings.HotkeyKey = FreeHotkey(7);
+                liveSettings.Settings.HotkeyModifiers = 7;
+                liveSettings.Save();
+                controller = new Controller(liveRoot, false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
                 controller.Busy = true;
                 Check(controller.Sink.ClipboardRegistered, "Windows clipboard listener registers");
                 Console.WriteLine("Global shortcut registration: " + controller.Sink.HotkeyRegistered + ", Windows error: " + controller.Sink.HotkeyError);

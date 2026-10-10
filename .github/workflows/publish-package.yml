@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Published Release tag (for example v1.3.0)
+        description: Published Release tag (for example v1.3.1)
         required: true
-        default: v1.3.0
+        default: v1.3.1
         type: string
   release:
     types: [published]

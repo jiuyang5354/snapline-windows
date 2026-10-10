@@ -1,2 +1,2 @@
-b34973a5eeefedb4fe1e4022efe9921f585c9338d1e2d69c5e075bd5ebc14a46  Snapline-Windows-v1.3.0.zip
-282a1b2f4f94b710ef75033201344c6f8cbea279a6e7e2c0f4857bcf3fdeeab9  Snapline-Windows-Source-v1.3.0.zip
+2707e57da22aa24e2674a708a4a9a47fb9b4746bf24173541dbc1000acf06b4f  Snapline-Windows-v1.3.1.zip
+9425db84cb90db444887d69a05977b7bbb5492f61936b4a8c2a8c0e98f799c8e  Snapline-Windows-Source-v1.3.1.zip
