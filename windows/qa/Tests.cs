@@ -164,6 +164,24 @@ namespace Snapline
                 line.UpdateInteraction(new System.Drawing.Point((int)center.X, (int)center.Y));
                 Check((Native.GetWindowLong(handle, Native.GWL_EXSTYLE) & Native.WS_EX_TRANSPARENT) == 0, "Photo areas restore mouse input");
                 controller.Busy = true;
+                line.PreviewBackdrop(Fixture((int)Math.Ceiling(line.ActualWidth), (int)LineWindow.PanelHeight, 4), 1);
+                Pump(200);
+                var clearPixel = new RenderTargetBitmap((int)Math.Ceiling(line.ActualWidth), (int)LineWindow.PanelHeight, 96, 96, PixelFormats.Pbgra32);
+                clearPixel.Render(line);
+                var blankPixel = new byte[4]; clearPixel.CopyPixels(new Int32Rect(20, 80, 1, 1), blankPixel, 4, 0);
+                Check(blankPixel[3] == 0 && Hit(handle, line.PointToScreen(new Point(20, 80))) == -1,
+                    "Space outside the individual photo frames stays fully transparent and passes clicks to the desktop");
+                cards = canvas.Children.OfType<ShotCard>().ToArray();
+                var frames = Descendants(line).OfType<GlassFrame>().ToArray();
+                Check(frames.Length == cards.Length && frames.All(frame => frame.Children.OfType<Image>().Any(materialImage => !materialImage.IsHitTestVisible && materialImage.Source != null)),
+                    "Every live photo container has its own rendered optical material beneath the screenshot");
+                foreach (var card in cards)
+                {
+                    var photo = Descendants(card).OfType<Image>().Single(photoImage => photoImage.Source == card.Shot.Thumbnail);
+                    Check(Math.Abs(photo.ActualWidth / photo.ActualHeight - card.Shot.Thumbnail.Width / card.Shot.Thumbnail.Height) < 0.001,
+                        "Original aspect ratio is preserved without cropping for " + card.Shot.Thumbnail.PixelWidth + "x" + card.Shot.Thumbnail.PixelHeight);
+                }
+                CheckGlassMaterial();
                 SaveRender(line, Path.Combine(output, "line-render.png"));
                 SavePreview(line, Path.Combine(output, "preview.png"), controller.Sink.HotkeyText);
 
@@ -182,6 +200,10 @@ namespace Snapline
                 Pump(200);
                 var narrowCards = ((Canvas)line.Content).Children.OfType<ShotCard>().ToArray();
                 Check(narrowCards.Length == 1 && Canvas.GetLeft(narrowCards[0]) >= 0, "Narrow displays show recent cards without overflow");
+                Check(new[] { line.LatestButton, line.PauseButton, line.SettingsButton }.All(button => {
+                    var point = button.TranslatePoint(new Point(), line);
+                    return button.ActualWidth >= 28 && point.X >= 0 && point.X + button.ActualWidth <= line.ActualWidth && point.Y + button.ActualHeight <= line.ActualHeight;
+                }), "All toolbar actions remain visible and usable on a 400 DIP display");
                 line.Reveal(display);
                 Pump(450);
                 SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(controller.Sink.HotkeyId), IntPtr.Zero);
@@ -741,6 +763,41 @@ namespace Snapline
         private static void DrawText(DrawingContext dc, string text, double size, Brush brush, double x, double y)
         {
             dc.DrawText(new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), size, brush, 1.0), new Point(x, y));
+        }
+
+        private static void CheckGlassMaterial()
+        {
+            var area = new Rect(17, 18, 240, 76);
+            var first = new GlassBackdrop(Fixture(400, 200, 1), 1).Bevel(area, 22);
+            var second = new GlassBackdrop(Fixture(400, 200, 2), 1).Bevel(area, 22);
+            var pixels = new byte[first.PixelWidth * first.PixelHeight * 4];
+            first.CopyPixels(pixels, first.PixelWidth * 4, 0);
+            Check(pixels[(38 * first.PixelWidth + 120) * 4 + 3] == 0, "Optical material leaves the center clear so screenshot pixels remain in their own layer");
+            Check(pixels[3] == 0 && pixels[(2 * first.PixelWidth + 120) * 4 + 3] > 0, "Rounded corners are transparent while the bevel contains refracted backdrop pixels");
+            Check(ImageStore.Digest(first) != ImageStore.Digest(second), "Optical rim responds to the actual backdrop instead of a fixed painted gradient");
+            Check(Enumerable.Range(0, pixels.Length / 4).All(index => pixels[index * 4] <= pixels[index * 4 + 3] &&
+                pixels[index * 4 + 1] <= pixels[index * 4 + 3] && pixels[index * 4 + 2] <= pixels[index * 4 + 3]), "Glass bitmap has valid premultiplied alpha without bright halos");
+            var scaled = new GlassBackdrop(Fixture(600, 300, 1), 1.5).Bevel(area, 22);
+            Check(scaled.PixelWidth == 360 && scaled.PixelHeight == 114 && Math.Abs(scaled.Width - area.Width) < 0.001,
+                "150 percent DPI material retains its logical size and pixel alignment");
+            var split = new byte[400 * 240 * 4];
+            for (int y = 0; y < 240; y++)
+            for (int x = 0; x < 400; x++)
+            {
+                int offset = (y * 400 + x) * 4;
+                split[offset] = (byte)(x < 200 ? 220 : 20); split[offset + 1] = 30;
+                split[offset + 2] = (byte)(x < 200 ? 20 : 220); split[offset + 3] = 255;
+            }
+            var backdrop = new GlassBackdrop(BitmapSource.Create(400, 240, 96, 96, PixelFormats.Bgra32, null, split, 400 * 4), 1);
+            var map = new GlassBackdrop.BevelMap(new Size(160, 120), 14, 1);
+            var left = new byte[160 * 120 * 4]; var right = new byte[left.Length];
+            map.Render(backdrop, Matrix.Identity).CopyPixels(left, 160 * 4, 0);
+            map.Render(backdrop, new Matrix(1, 0, 0, 1, 220, 0)).CopyPixels(right, 160 * 4, 0);
+            int rimPixel = (2 * 160 + 80) * 4;
+            Check(left[rimPixel] > left[rimPixel + 2] && right[rimPixel + 2] > right[rimPixel],
+                "Moving a photo container samples the blue or red backdrop region at its actual position");
+            map.Render(backdrop, new Matrix(0, 1, -1, 0, 220, 10)).CopyPixels(right, 160 * 4, 0);
+            Check(right[rimPixel + 2] > right[rimPixel], "Rotated containers counter-align the backdrop instead of rotating a stale texture");
         }
 
         private static void SaveRender(LineWindow line, string path)

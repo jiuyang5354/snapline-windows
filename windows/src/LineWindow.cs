@@ -6,6 +6,7 @@ using System.Windows.Automation;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
@@ -14,7 +15,7 @@ namespace Snapline
 {
     internal sealed class LineWindow : Window
     {
-        internal const double PanelHeight = 320;
+        internal const double PanelHeight = 234;
         private readonly Controller controller;
         private readonly Canvas canvas = new Canvas();
         private readonly TranslateTransform slide = new TranslateTransform(0, -PanelHeight);
@@ -24,6 +25,7 @@ namespace Snapline
         internal TextBlock StatusText, HotkeyText;
         private TextBlock pauseLabel, pauseGlyph, countText;
         private Ellipse statusDot;
+        private GlassBackdrop backdrop;
         internal bool Revealed { get; private set; }
         internal Forms.Screen Display { get; private set; }
         internal System.Drawing.Rectangle PixelBounds { get; private set; }
@@ -89,6 +91,7 @@ namespace Snapline
 
         internal void Reveal(Forms.Screen display)
         {
+            if (Display != null && Display.DeviceName != display.DeviceName && IsVisible) Hide();
             Display = display;
             double scale = Native.Scale(display);
             var work = display.WorkingArea;
@@ -97,6 +100,9 @@ namespace Snapline
             if (handle == IntPtr.Zero) new WindowInteropHelper(this).EnsureHandle();
             Native.SetWindowPos(handle, Native.Topmost, work.Left, work.Top, work.Width, (int)Math.Ceiling(PanelHeight * scale), 0x0010);
             PixelBounds = new System.Drawing.Rectangle(work.Left, work.Top, work.Width, (int)Math.Ceiling(PanelHeight * scale));
+            // Sample before showing the overlay, so the material cannot capture itself.
+            // Only each photo frame's bevel uses this snapshot; screenshot content stays separate.
+            if (!IsVisible) backdrop = GlassBackdrop.Capture(PixelBounds, scale);
             if (!IsVisible) Show();
             Rebuild();
             ++transition;
@@ -127,75 +133,81 @@ namespace Snapline
             if (double.IsNaN(width) || width < 1) return;
             canvas.Children.Clear();
             var geometry = new StreamGeometry();
-            double sag = Math.Min(14, width * 0.008);
+            double sag = Math.Min(30, width * 0.018);
             using (var drawing = geometry.Open())
             {
-                drawing.BeginFigure(new Point(8, 72), false, false);
-                drawing.QuadraticBezierTo(new Point(width / 2, 72 + sag * 2), new Point(width - 8, 72), true, false);
+                drawing.BeginFigure(new Point(0, 10), false, false);
+                drawing.QuadraticBezierTo(new Point(width / 2, 10 + sag * 2), new Point(width, 10), true, false);
             }
             geometry.Freeze();
-            canvas.Children.Add(new Path { Data = geometry, Stroke = Ui.Brush("Muted"), Opacity = 0.6, StrokeThickness = 1.2, IsHitTestVisible = false });
+            var stroke = new LinearGradientBrush(new GradientStopCollection {
+                new GradientStop(Color.FromArgb(0, 195, 201, 208), 0), new GradientStop(Color.FromArgb(230, 195, 201, 208), 0.08),
+                new GradientStop(Color.FromArgb(230, 195, 201, 208), 0.92), new GradientStop(Color.FromArgb(0, 195, 201, 208), 1)
+            }, new Point(0, 0), new Point(1, 0));
+            canvas.Children.Add(new Path { Data = geometry, Stroke = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
+                StrokeThickness = 2.4, RenderTransform = new TranslateTransform(0, 1.4), IsHitTestVisible = false });
+            canvas.Children.Add(new Path { Data = geometry, Stroke = stroke, StrokeThickness = 1.2, IsHitTestVisible = false });
             canvas.Children.Add(Toolbar(width));
 
-            int capacity = Math.Max(1, Math.Min(ImageStore.MaxItems, (int)((width - 96) / 222)));
+            int capacity = Math.Max(1, Math.Min(ImageStore.MaxItems, (int)((width - 96) / 174)));
             var shots = controller.Store.Items.Skip(Math.Max(0, controller.Store.Items.Count - capacity)).ToArray();
             if (shots.Length == 0)
             {
-                var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-                content.Children.Add(Ui.Text("等第一张截图挂上来", 19, false));
-                content.Children.Add(new TextBlock { Text = "按 Win + Shift + S 截图，复制后自动收集", Foreground = Ui.Brush("Muted"), FontFamily = Ui.Font,
-                    FontSize = 12, Margin = new Thickness(0, 10, 0, 16), TextAlignment = TextAlignment.Center });
-                var import = Ui.Button("挂入图片", controller.Import);
-                import.Focusable = false; import.HorizontalAlignment = HorizontalAlignment.Center;
+                var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                var text = Ui.Text("Win + Shift + S  截一张，挂在这里", 12, false);
+                text.VerticalAlignment = VerticalAlignment.Center; content.Children.Add(text);
+                var import = Ui.Button("挂入图片", controller.Import); import.Style = (Style)Application.Current.FindResource("Bare");
+                import.Focusable = false; import.Margin = new Thickness(8, 0, 0, 0); import.Padding = new Thickness(7, 5, 7, 5); import.FontSize = 11;
                 content.Children.Add(import);
-                var hint = new Border { Width = Math.Min(490, width - 48), CornerRadius = new CornerRadius(6), Padding = new Thickness(20),
-                    Background = Ui.Brush("Surface"), BorderBrush = Ui.Brush("Line"), BorderThickness = new Thickness(1), Child = content };
+                double hintWidth = Math.Min(350, width - 48);
+                var hint = new Border { Width = hintWidth, Height = 42, CornerRadius = new CornerRadius(21),
+                    Background = Ui.Brush("Surface"), Child = content };
                 Canvas.SetLeft(hint, (width - hint.Width) / 2);
-                Canvas.SetTop(hint, 112);
+                Canvas.SetTop(hint, 64);
                 canvas.Children.Add(hint);
             }
             for (int i = 0; i < shots.Length; i++)
             {
-                double x = width / 2 - (shots.Length - 1) * 222 / 2 + i * 222;
+                double x = width / 2 - (shots.Length - 1) * 174 / 2 + i * 174;
                 double fraction = x / width;
-                var card = new ShotCard(shots[i], controller);
+                var card = new ShotCard(shots[i], controller, backdrop);
                 Canvas.SetLeft(card, x - card.Width / 2);
-                Canvas.SetTop(card, 72 + 4 * sag * fraction * (1 - fraction) - 11);
+                Canvas.SetTop(card, 10 + 4 * sag * fraction * (1 - fraction) - 9.5);
                 canvas.Children.Add(card);
             }
-            var help = new Border { Background = Ui.Brush("Surface"), Padding = new Thickness(9, 3, 9, 3), CornerRadius = new CornerRadius(3),
-                Child = Ui.Text("单击复制 · 双击预览 · 长按编辑 · 拖出使用", 11, true), IsHitTestVisible = false };
-            help.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            Canvas.SetLeft(help, (width - help.DesiredSize.Width) / 2);
-            Canvas.SetTop(help, 296);
-            canvas.Children.Add(help);
             RefreshStatus();
+        }
+
+        internal void PreviewBackdrop(BitmapSource image, double scale)
+        {
+            backdrop = new GlassBackdrop(image, scale);
+            Rebuild();
         }
 
         private Border Toolbar(double width)
         {
-            bool compact = width < 760;
+            bool compact = width < 680;
             var grid = new Grid { Margin = new Thickness(14, 0, 7, 0) };
             grid.ColumnDefinitions.Add(new ColumnDefinition());
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             status.Children.Add(new Path { Data = Geometry.Parse("M 1,9 L 20,9 M 7,3 L 7,17 M 14,3 L 14,17 M 7,3 Q 10.5,0 14,3"),
-                Stroke = Ui.Brush("Accent"), StrokeThickness = 2, Width = 22, Height = 20, Margin = new Thickness(0, 0, 9, 0) });
-            status.Children.Add(new TextBlock { Text = "Snapline", FontFamily = new FontFamily("Segoe UI"), FontSize = 15, FontWeight = FontWeights.SemiBold,
+                Stroke = Ui.Brush("Ink"), StrokeThickness = 1.6, Width = 18, Height = 18, Margin = new Thickness(0, 0, 8, 0) });
+            status.Children.Add(new TextBlock { Text = "Snapline", FontFamily = new FontFamily("Segoe UI"), FontSize = 13, FontWeight = FontWeights.SemiBold,
                 Foreground = Ui.Brush("Ink"), VerticalAlignment = VerticalAlignment.Center });
             statusDot = new Ellipse { Width = 6, Height = 6, Margin = new Thickness(16, 0, 7, 0) };
             status.Children.Add(statusDot);
-            StatusText = Ui.Text("", 12, true); StatusText.VerticalAlignment = VerticalAlignment.Center;
-            StatusText.Visibility = width < 600 ? Visibility.Collapsed : Visibility.Visible;
+            StatusText = Ui.Text("", 11, false); StatusText.VerticalAlignment = VerticalAlignment.Center;
+            StatusText.Visibility = width < 560 ? Visibility.Collapsed : Visibility.Visible;
             status.Children.Add(StatusText);
-            countText = Ui.Text("", 12, true); countText.VerticalAlignment = VerticalAlignment.Center;
+            countText = Ui.Text("", 11, false); countText.VerticalAlignment = VerticalAlignment.Center;
             countText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
             status.Children.Add(countText);
             grid.Children.Add(status);
             var commands = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            HotkeyText = Ui.Text("", 12, true); HotkeyText.FontFamily = new FontFamily("Consolas");
+            HotkeyText = Ui.Text("", 12, false); HotkeyText.FontFamily = new FontFamily("Consolas");
             HotkeyText.VerticalAlignment = VerticalAlignment.Center; HotkeyText.Margin = new Thickness(0, 0, 16, 0);
-            HotkeyText.Visibility = width < 1040 ? Visibility.Collapsed : Visibility.Visible;
+            HotkeyText.Visibility = Visibility.Collapsed;
             commands.Children.Add(HotkeyText);
             LatestButton = ToolbarButton("\uE8C8", "复制最近一张", compact, delegate { controller.CopyLatest(); });
             commands.Children.Add(LatestButton);
@@ -207,9 +219,10 @@ namespace Snapline
             SettingsButton = ToolbarButton("\uE713", "设置", compact, delegate { controller.ShowSettings("General"); });
             commands.Children.Add(SettingsButton);
             Grid.SetColumn(commands, 1); grid.Children.Add(commands);
-            var bar = new Border { Width = Math.Max(1, width - 48), Height = 46, CornerRadius = new CornerRadius(6), Background = Ui.Brush("Surface"),
-                BorderBrush = Ui.Brush("Line"), BorderThickness = new Thickness(1), Child = grid };
-            Canvas.SetLeft(bar, 24); Canvas.SetTop(bar, 12);
+            double barWidth = Math.Max(1, Math.Min(660, width - 48));
+            var bar = new Border { Width = barWidth, Height = 34, CornerRadius = new CornerRadius(17),
+                Background = Ui.Brush("Surface"), BorderBrush = Ui.Brush("Line"), BorderThickness = new Thickness(1), Child = grid };
+            Canvas.SetLeft(bar, (width - barWidth) / 2); Canvas.SetTop(bar, 188);
             return bar;
         }
 
@@ -217,11 +230,11 @@ namespace Snapline
         {
             var content = new StackPanel { Orientation = Orientation.Horizontal };
             content.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 13, Foreground = Ui.Brush("Ink"), VerticalAlignment = VerticalAlignment.Center });
-            var text = Ui.Text(label, 12, false); text.Margin = new Thickness(8, 0, 0, 0);
+            var text = Ui.Text(label, 11, false); text.Margin = new Thickness(7, 0, 0, 0);
             text.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
             content.Children.Add(text);
             var button = Ui.Button(label, action); button.Content = content; button.Focusable = false;
-            button.Style = (Style)Application.Current.FindResource("Bare"); button.Padding = new Thickness(10, 8, 10, 8); button.ToolTip = label;
+            button.Style = (Style)Application.Current.FindResource("Bare"); button.Padding = new Thickness(9, 5, 9, 5); button.ToolTip = label;
             AutomationProperties.SetName(button, label);
             return button;
         }

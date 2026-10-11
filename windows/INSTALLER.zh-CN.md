@@ -4,7 +4,7 @@ Snapline 是 Tendedero 的非官方 Windows 移植版。原项目作者为 Aleja
 
 ## 安装和桌面图标
 
-下载 `Snapline-Windows-Setup-v1.3.1.exe`，双击运行中文安装向导。“创建桌面快捷方式”默认勾选，可以取消。开始菜单入口始终创建；桌面图标使用程序自己的 Snapline 图标。
+下载 `Snapline-Windows-Setup-v1.3.2.exe`，双击运行中文安装向导。“创建桌面快捷方式”默认勾选，可以取消。开始菜单入口始终创建；桌面图标使用程序自己的 Snapline 图标。
 
 默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，只安装给当前 Windows 用户，不需要管理员权限。需要 Windows 10 / 11 和 .NET Framework 4.8 或更高版本；不自动下载或修改系统运行时。
 
