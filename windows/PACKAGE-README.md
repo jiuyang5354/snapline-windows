@@ -4,6 +4,8 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官�
 
 本 NuGet 包包含已发布的 Windows 便携程序，文件位于 `tools/Snapline/`。需要 **Windows 10 / 11 和 .NET Framework 4.8 或更高版本**。
 
+v1.4.4 对应软件包版本 `1.4.4-preview`，包含液态毛玻璃设置、液态金属控件和本版软件内公告；完整改动与验证范围随包保留。
+
 ## 下载和运行
 
 普通用户可直接从 [Releases](https://github.com/jiuyang5354/snapline-windows/releases) 下载 `Snapline-Windows-v版本号.zip`，解压整个文件夹并运行 `Snapline.exe`。

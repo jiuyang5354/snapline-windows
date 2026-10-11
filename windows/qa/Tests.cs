@@ -48,6 +48,7 @@ namespace Snapline
         [STAThread]
         private static int Main(string[] args)
         {
+            if (args.Length == 2 && args[0] == "--materials") return CheckSettingsMaterials(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--network") return CheckNetwork(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--editor") return CheckPaint(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--bindings") {
@@ -1323,6 +1324,96 @@ namespace Snapline
             Check(tray.ContextMenuStrip.Items.OfType<Forms.ToolStripMenuItem>().Any(item => item.Text.StartsWith("区域截图") && item.Text.Contains(controller.Sink.CaptureHotkeyText)),
                 "The tray capture command displays the custom capture shortcut");
             DialogAction(controller, delegate(SettingsWindow dialog) { SaveSettingsRender(dialog, Path.Combine(output, "capture-hotkey-dialog.png")); });
+        }
+
+        private static int CheckSettingsMaterials(string output)
+        {
+            Directory.CreateDirectory(output);
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            Controller controller = null; SettingsWindow dialog = null;
+            try {
+                string root = Path.Combine(output, "material-run-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+                var store = new ImageStore(root);
+                store.Settings.ListenClipboard = false; store.Settings.CollectionPaused = true; store.Settings.AutoCheckUpdates = false;
+                store.Settings.HotkeyKey = FreeHotkey(7); store.Settings.HotkeyModifiers = 7;
+                store.Settings.CaptureHotkeyKey = FreeHotkey(6); store.Settings.CaptureHotkeyModifiers = 6; store.Save();
+                controller = new Controller(root, false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
+                controller.Busy = true;
+                dialog = new SettingsWindow(controller) { ShowActivated = false };
+                dialog.Show(); Pump(500);
+                var screen = Forms.Screen.FromHandle(new WindowInteropHelper(dialog).Handle);
+                double scale = Native.Scale(screen);
+                var backdrop = new RenderTargetBitmap(screen.Bounds.Width, screen.Bounds.Height, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+                var landscape = new DrawingVisual();
+                using (var dc = landscape.RenderOpen()) {
+                    double w = screen.Bounds.Width / scale, h = screen.Bounds.Height / scale;
+                    dc.DrawRectangle(new LinearGradientBrush(Color.FromRgb(202, 215, 217), Color.FromRgb(141, 166, 154), 90), null, new Rect(0, 0, w, h));
+                    dc.PushTransform(new ScaleTransform(w / 1600, h / 1000));
+                    foreach (var hill in new[] {
+                        new[] { "#B4C5C1", "M0,480 L200,365 L330,180 L520,370 L750,135 L1000,405 L1180,235 L1380,460 L1600,400 L1600,720 L0,720 Z" },
+                        new[] { "#8FA9A0", "M0,600 L160,470 L320,540 L490,360 L730,570 L1000,350 L1300,520 L1480,440 L1600,570 L1600,800 L0,800 Z" },
+                        new[] { "#708F83", "M0,780 L190,655 L420,705 L690,585 L930,720 L1140,640 L1450,560 L1600,700 L1600,1000 L0,1000 Z" } })
+                        dc.DrawGeometry(new SolidColorBrush((Color)ColorConverter.ConvertFromString(hill[0])), null, Geometry.Parse(hill[1]));
+                    dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(154, 177, 169)), null, new Rect(0, 775, 1600, 225));
+                    dc.DrawGeometry(new SolidColorBrush(Color.FromRgb(65, 90, 79)), null, Geometry.Parse("M0,715 L170,720 L305,1000 L0,1000 Z"));
+                    dc.Pop();
+                }
+                backdrop.Render(landscape); backdrop.Freeze();
+                dialog.Glass.SetBackdrop(new GlassBackdrop(backdrop, scale), new Rect(screen.Bounds.Left / scale, screen.Bounds.Top / scale, screen.Bounds.Width / scale, screen.Bounds.Height / scale));
+                dialog.UpdateLayout(); Pump(100);
+                var glassImage = new RenderTargetBitmap((int)Math.Ceiling(dialog.Glass.ActualWidth * 1.5), (int)Math.Ceiling(dialog.Glass.ActualHeight * 1.5), 144, 144, PixelFormats.Pbgra32);
+                glassImage.Render(dialog.Glass);
+                var glassPixels = new byte[glassImage.PixelWidth * glassImage.PixelHeight * 4];
+                glassImage.CopyPixels(glassPixels, glassImage.PixelWidth * 4, 0);
+                int center = ((glassImage.PixelHeight / 2) * glassImage.PixelWidth + glassImage.PixelWidth / 2) * 4;
+                Check(glassPixels[center + 3] == 255 && glassPixels[3] == 0, "Glass paints the full backdrop center and preserves transparent rounded corners");
+                Check(glassPixels[center] < 240 && glassPixels[center + 2] < 240, "The glass center retains landscape color instead of turning into a white rectangle");
+                var backdropLayer = Descendants(dialog.Glass).OfType<Image>().First(image => image.Source != null);
+                string beforeMove = ImageStore.Digest((BitmapSource)backdropLayer.Source);
+                var zeroAlpha = new GlassBackdrop(BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 44, 55, 66, 0 }, 4), 1).Sample(new Rect(0, 0, 1, 1));
+                var zeroPixels = new byte[4]; zeroAlpha.CopyPixels(zeroPixels, 4, 0);
+                Check(zeroPixels.SequenceEqual(new byte[] { 44, 55, 66, 255 }), "Desktop sampling repairs zero-alpha screen pixels without changing their color");
+                Check(dialog.Materials.Count == 22 && dialog.Materials.Where(m => m.IsVisible).All(m => m.Frames > 0), "Native metal textures render on all visible controls");
+                foreach (string page in new[] { "General", "Capture", "Keys", "Storage", "About" }) {
+                    dialog.ShowPage(page); dialog.UpdateLayout(); Pump(100);
+                    var bounds = dialog.Part<Grid>("Pages");
+                    Check(Descendants(dialog.Part<StackPanel>(page + "Page")).OfType<FrameworkElement>().Where(el => el is TextBlock || el is Button || el is CheckBox || el is TextBox).All(el => {
+                        var box = el.TransformToAncestor(bounds).TransformBounds(new Rect(el.RenderSize));
+                        return box.Left >= -1 && box.Top >= -1 && box.Right <= bounds.ActualWidth + 1 && box.Bottom <= bounds.ActualHeight + 1;
+                    }), "Native glass " + page + " page keeps labels and controls inside the content area");
+                    SaveSettingsRender(dialog, Path.Combine(output, "native-settings-" + page.ToLowerInvariant() + ".png"));
+                }
+                dialog.ShowPage("General"); dialog.UpdateLayout();
+                var surface = dialog.Materials.First(m => m.ActualWidth > 100 && m.ActualHeight > 35);
+                var textures = LiquidMetal.Render(140, 41, 3.5, new Point(70, 20.5), false, false, -1);
+                var pixels = new byte[textures[0].PixelWidth * textures[0].PixelHeight * 4]; textures[0].CopyPixels(pixels, textures[0].PixelWidth * 4, 0);
+                Check(pixels[3] == 0 && pixels[((textures[0].PixelHeight / 2) * textures[0].PixelWidth + textures[0].PixelWidth / 2) * 4 + 3] == 255,
+                    "Metal preserves transparent exterior padding and an opaque readable center");
+                Check(Enumerable.Range(0, pixels.Length / 4).All(i => pixels[i * 4] <= pixels[i * 4 + 3] && pixels[i * 4 + 1] <= pixels[i * 4 + 3] && pixels[i * 4 + 2] <= pixels[i * 4 + 3]),
+                    "Native metal pixels use valid premultiplied alpha");
+                var hovered = LiquidMetal.Render(140, 41, 4.1, new Point(100, 16), true, false, .2);
+                Check(ImageStore.Digest(textures[0]) != ImageStore.Digest(hovered[0]) && ImageStore.Digest(textures[1]) != ImageStore.Digest(hovered[1]), "Hover and ripple change the native metal body and crisp rim pixels");
+                var glowPixels = new byte[textures[2].PixelWidth * textures[2].PixelHeight * 4]; textures[2].CopyPixels(glowPixels, textures[2].PixelWidth * 4, 0);
+                Check(Enumerable.Range(0, glowPixels.Length / 4).Any(i => pixels[i * 4 + 3] == 0 && glowPixels[i * 4 + 3] > 0), "The metal bloom has visible pixels outside the capsule body");
+                var nav = dialog.Part<RadioButton>("NavGeneral");
+                dialog.Activate(); nav.Focus(); dialog.SetInputMode(true); Pump(100);
+                Check(dialog.Materials.Any(m => m.FocusVisible), "Keyboard interaction shows a native focus outline");
+                SaveSettingsRender(dialog, Path.Combine(output, "native-keyboard-focus.png"));
+                dialog.SetInputMode(false); Pump(100);
+                Check(!dialog.Materials.Any(m => m.FocusVisible) && nav.IsKeyboardFocused, "Mouse input removes the outline while preserving the same focused native control");
+                Pump(2700);
+                Check(!dialog.Materials.Any(m => m.Animating), "Native material animation stops after keyboard focus returns to pointer input");
+                int frames = dialog.Materials.Sum(m => m.Frames); Pump(350);
+                Check(frames == dialog.Materials.Sum(m => m.Frames), "Idle settings do not continuously regenerate metal textures");
+                dialog.Left += 24; dialog.Glass.Update(); Pump(100);
+                SaveSettingsRender(dialog, Path.Combine(output, "native-settings-moved.png"));
+                Check(beforeMove != ImageStore.Digest((BitmapSource)backdropLayer.Source), "Moving settings changes the sampled backdrop pixels");
+                Console.WriteLine("PASS " + checks.Count + " native material checks.");
+                File.WriteAllLines(Path.Combine(output, "material-results.txt"), checks);
+                return 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine(ex.GetType().Name + ": " + ex.Message + "\n" + ex.StackTrace); return 1; }
+            finally { if (dialog != null) dialog.Close(); if (controller != null) controller.Dispose(); app.Shutdown(); }
         }
 
         private static void DialogAction(Controller controller, Action<SettingsWindow> action)

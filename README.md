@@ -4,27 +4,27 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的**非�
 
 An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# / WPF and Win32. This project uses its own name and icon and is not endorsed by the upstream author.
 
-**v1.4.3 新增自定义区域截图快捷键。** 默认 `Ctrl + Alt + S`，可在“设置 → 快捷键”中单独修改，保存后立即生效，重启后保留。继续包含离线更新公告、画图启动修复、悬停快捷操作和鼠标指针开关。本版为 Windows 预发布版，完整程序回归 233 项通过，实际验证范围见 [验证记录](windows/QA.md)。
+**v1.4.4 更新设置界面。** 五页设置采用更通透的液态毛玻璃，导航、按钮和开关使用液态金属质感，保留边缘高光与外侧泛光。鼠标操作清除多余焦点框，键盘导航保留焦点提示。软件内更新公告同步说明本次改动。本版为 Windows 预发布版，实际验证范围见 [验证记录](windows/QA.md)。
 
 ![Snapline Windows 窗口预览](docs/preview.png)
 
-上图是实际 WPF 截图栏放在展示背景上的效果；截图与背景由程序生成。液态玻璃仅用于每张截图的容器，空白区域保持透明。
+上图是实际 WPF 截图栏放在展示背景上的效果；截图与背景由程序生成。截图栏的液态玻璃用于每张截图的容器，空白区域保持透明。
 
 ![Snapline 统一设置窗口](docs/settings.png)
 
-v1.4.3 设置包含常规、截图、快捷键、存储、关于五页，保留原作者与许可信息。
+v1.4.4 原生 WPF 设置窗口，包含常规、截图、快捷键、存储、关于五页。展示背景由程序生成；窗口背景在打开前采样并保存在内存，移动时重新定位采样，视频或窗口变化不会实时刷新。保留原作者与许可信息。
 
 ## 下载和运行
 
-- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.3/Snapline-Windows-Setup-v1.4.3.exe)
-- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.3/Snapline-Windows-v1.4.3.zip)
-- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.3/Snapline-Windows-Source-v1.4.3.zip)
-- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.3/Snapline-Windows-Installer-Source-v1.4.3.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.3/SHA256SUMS-Setup.txt)
-- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.4.3)
+- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.4/Snapline-Windows-Setup-v1.4.4.exe)
+- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.4/Snapline-Windows-v1.4.4.zip)
+- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.4/Snapline-Windows-Source-v1.4.4.zip)
+- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.4/Snapline-Windows-Installer-Source-v1.4.4.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.4/SHA256SUMS-Setup.txt)
+- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.4.4)
 
 **安装版：** 双击 EXE，按中文向导安装。“创建桌面快捷方式”默认勾选，可取消；同时提供开始菜单入口和卸载入口。默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，只安装给当前用户，不需要管理员权限。开机启动默认关闭。卸载保留原来的截图和设置，完整说明见 [安装版指南](windows/INSTALLER.zh-CN.md)。
 
-另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，本版对应 NuGet 版本为 `1.4.3-preview`。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
+另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，本版对应 NuGet 版本为 `1.4.4-preview`。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
 
 目标系统为 **Windows 10 / 11，需 .NET Framework 4.8 或更高版本**。解压整个便携包，双击其中的 `Snapline.exe`。程序不需要管理员权限；运行后驻留系统托盘，图标也可能在“隐藏图标”菜单中。
 

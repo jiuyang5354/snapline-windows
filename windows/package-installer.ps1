@@ -1,5 +1,5 @@
 param(
-    [string]$PortableZip = (Join-Path $PSScriptRoot 'Snapline-Windows-v1.4.3.zip'),
+    [string]$PortableZip = (Join-Path $PSScriptRoot 'Snapline-Windows-v1.4.4.zip'),
     [string]$ChecksumFile = (Join-Path (Split-Path $PSScriptRoot -Parent) 'SHA256SUMS.txt'),
     [string]$NsisPath = (Join-Path $PSScriptRoot '.tools\nsis-3.13\makensis.exe'),
     [switch]$Test

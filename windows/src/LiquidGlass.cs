@@ -63,6 +63,40 @@ namespace Snapline
             return new BevelMap(area.Size, radius, Scale).Render(this, new Matrix(1, 0, 0, 1, area.X, area.Y));
         }
 
+        internal double Luminance(Rect area)
+        {
+            double total = 0;
+            for (int y = 0; y < 8; y++)
+            for (int x = 0; x < 8; x++) {
+                int sx = Math.Max(0, Math.Min(width - 1, (int)((area.X + area.Width * (x + .5) / 8) * Scale)));
+                int sy = Math.Max(0, Math.Min(height - 1, (int)((area.Y + area.Height * (y + .5) / 8) * Scale)));
+                int i = (sy * width + sx) * 4;
+                total += (.2126 * pixels[i + 2] + .7152 * pixels[i + 1] + .0722 * pixels[i]) / 255;
+            }
+            return total / 64;
+        }
+
+        internal BitmapSource Sample(Rect area)
+        {
+            int w = Math.Max(1, (int)Math.Ceiling(area.Width * Scale));
+            int h = Math.Max(1, (int)Math.Ceiling(area.Height * Scale));
+            int left = (int)Math.Floor(area.X * Scale), top = (int)Math.Floor(area.Y * Scale);
+            var output = new byte[w * h * 4];
+            for (int y = 0; y < h; y++) {
+                int sy = Math.Max(0, Math.Min(height - 1, top + y));
+                if (left >= 0 && left + w <= width)
+                    Buffer.BlockCopy(pixels, (sy * width + left) * 4, output, y * w * 4, w * 4);
+                else for (int x = 0; x < w; x++) {
+                    int sx = Math.Max(0, Math.Min(width - 1, left + x));
+                    Buffer.BlockCopy(pixels, (sy * width + sx) * 4, output, (y * w + x) * 4, 4);
+                }
+                // Screen-copy APIs can supply zero alpha for visible desktop pixels.
+                for (int x = 0; x < w; x++) output[(y * w + x) * 4 + 3] = 255;
+            }
+            var result = BitmapSource.Create(w, h, 96 * Scale, 96 * Scale, PixelFormats.Bgra32, null, output, w * 4);
+            result.Freeze(); return result;
+        }
+
         internal sealed class BevelMap
         {
             private struct RimPixel
@@ -75,13 +109,13 @@ namespace Snapline
             private readonly int width, height;
             private readonly double scale;
 
-            internal BevelMap(Size size, double radius, double scale)
+            internal BevelMap(Size size, double radius, double scale, double bevelWidth = 11)
             {
                 this.scale = scale;
                 width = Math.Max(1, (int)Math.Ceiling(size.Width * scale));
                 height = Math.Max(1, (int)Math.Ceiling(size.Height * scale));
                 double r = Math.Min(radius * scale, Math.Min(width, height) / 2.0);
-                double bevel = Math.Min(11 * scale, r);
+                double bevel = Math.Min(bevelWidth * scale, r);
                 // Cache geometry and Snell deflection; animation only resamples the backdrop.
                 for (int y = 0; y < height; y++)
                 for (int x = 0; x < width; x++)

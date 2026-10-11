@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Forms = System.Windows.Forms;
 
@@ -16,6 +19,9 @@ namespace Snapline
         private string keyError, captureError;
         private string folder;
         private bool startup;
+        internal bool KeyboardMode { get; private set; }
+        internal readonly List<LiquidMetal> Materials = new List<LiquidMetal>();
+        internal readonly SettingsGlass Glass = new SettingsGlass();
         internal bool RecordingHotkey { get { return Part<TextBox>("HotkeyInput").IsKeyboardFocusWithin || Part<TextBox>("CaptureHotkeyInput").IsKeyboardFocusWithin; } }
         private const string KeyHelp = "支持单键和 Ctrl / Alt / Shift / Win 组合。";
 
@@ -24,20 +30,39 @@ namespace Snapline
             this.controller = controller;
             View = Ui.Load<Border>("Settings");
             Title = "Snapline · 设置";
-            Width = 844; Height = 520; ResizeMode = ResizeMode.NoResize;
+            Width = 928; Height = 608; ResizeMode = ResizeMode.NoResize;
             WindowStyle = WindowStyle.None; AllowsTransparency = true;
             Background = System.Windows.Media.Brushes.Transparent;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Content = View;
             if (SystemParameters.WorkArea.Height < Height + 24 || SystemParameters.WorkArea.Width < Width + 24) {
-                View.Width = 844; View.Height = 520;
-                Width = Math.Min(844, SystemParameters.WorkArea.Width - 24);
-                Height = Math.Min(520, SystemParameters.WorkArea.Height - 24);
+                View.Width = 928; View.Height = 608;
+                Width = Math.Min(928, SystemParameters.WorkArea.Width - 24);
+                Height = Math.Min(608, SystemParameters.WorkArea.Height - 24);
                 Content = new Viewbox { Child = View };
             }
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Snapline.ico"))
                 Icon = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-            ((Grid)((Grid)View.Child).Children[0]).MouseLeftButtonDown += delegate { DragMove(); };
+            Part<Grid>("SettingsTitlebar").MouseLeftButtonDown += delegate { DragMove(); };
+            var root = (Grid)View.Child;
+            Grid.SetRowSpan(Glass, 3); root.Children.Insert(0, Glass);
+            SourceInitialized += delegate {
+                var screen = Forms.Screen.FromHandle(new WindowInteropHelper(this).Handle);
+                double scale = Native.Scale(screen);
+                Glass.SetBackdrop(GlassBackdrop.Capture(screen.Bounds, scale),
+                    new Rect(screen.Bounds.X / scale, screen.Bounds.Y / scale, screen.Bounds.Width / scale, screen.Bounds.Height / scale));
+            };
+            LocationChanged += delegate { Glass.Update(); };
+            PreviewMouseDown += delegate { SetInputMode(false); };
+            PreviewKeyDown += delegate { SetInputMode(true); };
+            Loaded += delegate {
+                foreach (string name in new[] { "CloseSettings", "CancelSettings", "SaveSettings", "RestoreKeys", "RestoreCaptureKeys", "OpenInbox", "ChooseFolder", "RemoveAll", "CheckUpdates", "ViewAnnouncement", "ReleasePage", "Usage",
+                    "NavGeneral", "NavCapture", "NavKeys", "NavStorage", "NavAbout", "CollectToggle", "PauseToggle", "StartupToggle", "UpdateToggle", "CursorToggle" }) {
+                    var control = Part<Control>(name); control.ApplyTemplate();
+                    var layer = (Grid)control.Template.FindName("MetalLayer", control);
+                    var material = new LiquidMetal(control, this); Materials.Add(material); layer.Children.Add(material);
+                }
+            };
             Click("CloseSettings", Close);
             Click("CancelSettings", Close);
             Click("SaveSettings", Save);
@@ -81,9 +106,12 @@ namespace Snapline
         }
 
         internal T Part<T>(string name) where T : class { return (T)View.FindName(name); }
+        internal void SetInputMode(bool keyboard)
+        { KeyboardMode = keyboard; foreach (var material in Materials) material.Update(); }
+        private Brush Brush(string name) { return (Brush)View.FindResource(name); }
         private void Click(string name, Action action) { Part<Button>(name).Click += delegate { action(); }; }
         private void Feedback(string text, bool error)
-        { Part<TextBlock>("SettingsFeedback").Text = text; Part<TextBlock>("SettingsFeedback").ToolTip = text; Part<TextBlock>("SettingsFeedback").Foreground = Ui.Brush(error ? "Accent" : "Muted"); }
+        { Part<TextBlock>("SettingsFeedback").Text = text; Part<TextBlock>("SettingsFeedback").ToolTip = text; Part<TextBlock>("SettingsFeedback").Foreground = Brush(error ? "Accent" : "Muted"); }
 
         internal void ShowPage(string page)
         {
@@ -102,8 +130,8 @@ namespace Snapline
         {
             TextBox input = Part<TextBox>(name);
             InputMethod.SetIsInputMethodEnabled(input, false);
-            input.GotKeyboardFocus += delegate { input.BorderBrush = Ui.Brush("Accent"); RefreshKeyHint("按下按键或组合键；Esc 恢复当前设置，Tab 离开输入框。"); };
-            input.LostKeyboardFocus += delegate { input.BorderBrush = Ui.Brush("Line"); };
+            input.GotKeyboardFocus += delegate { input.BorderBrush = Brush("Accent"); RefreshKeyHint("按下按键或组合键；Esc 恢复当前设置，Tab 离开输入框。"); };
+            input.LostKeyboardFocus += delegate { input.BorderBrush = Brush("Line"); };
             input.PreviewKeyDown += delegate(object sender, KeyEventArgs e) {
                 if (e.Key == Key.Tab) return;
                 e.Handled = true;
@@ -145,7 +173,7 @@ namespace Snapline
             string error = keyError ?? captureError;
             if (error == null && key == captureKey && modifiers == captureModifiers) error = "显示 / 隐藏与区域截图不能使用同一快捷键。";
             Part<Button>("SaveSettings").IsEnabled = error == null;
-            Part<TextBlock>("KeyHint").Foreground = Ui.Brush(error == null ? "Muted" : "Accent");
+            Part<TextBlock>("KeyHint").Foreground = Brush(error == null ? "Muted" : "Accent");
             Part<TextBlock>("KeyHint").Text = error ?? text;
         }
 
@@ -166,7 +194,7 @@ namespace Snapline
                 folder, key, modifiers, captureKey, captureModifiers, out error)) {
                 Feedback(error, true);
                 Part<TextBlock>("KeyHint").Text = error;
-                Part<TextBlock>("KeyHint").Foreground = Ui.Brush("Accent");
+                Part<TextBlock>("KeyHint").Foreground = Brush("Accent");
                 return;
             }
             bool desiredStartup = Part<CheckBox>("StartupToggle").IsChecked == true;
