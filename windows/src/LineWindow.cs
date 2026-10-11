@@ -21,7 +21,7 @@ namespace Snapline
         private readonly TranslateTransform slide = new TranslateTransform(0, -PanelHeight);
         private IntPtr handle;
         private int transition;
-        internal Button LatestButton, PauseButton, SettingsButton;
+        internal Button CaptureButton, LatestButton, PauseButton, SettingsButton;
         internal TextBlock StatusText, HotkeyText;
         private TextBlock pauseLabel, pauseGlyph, countText;
         private Ellipse statusDot;
@@ -87,6 +87,19 @@ namespace Snapline
             bool accepts = controller.Busy || IsCardAt(new Point(point.X, point.Y));
             int next = accepts ? style & ~Native.WS_EX_TRANSPARENT : style | Native.WS_EX_TRANSPARENT;
             if (next != style) Native.SetWindowLong(handle, Native.GWL_EXSTYLE, next);
+        }
+
+        internal ShotCard ShotAt(Point screenPoint)
+        {
+            if (!Revealed || !IsVisible) return null;
+            var element = InputHitTest(PointFromScreen(screenPoint)) as DependencyObject;
+            while (element != null)
+            {
+                var card = element as ShotCard;
+                if (card != null) return card;
+                element = VisualTreeHelper.GetParent(element);
+            }
+            return null;
         }
 
         internal void Reveal(Forms.Screen display)
@@ -209,6 +222,8 @@ namespace Snapline
             HotkeyText.VerticalAlignment = VerticalAlignment.Center; HotkeyText.Margin = new Thickness(0, 0, 16, 0);
             HotkeyText.Visibility = Visibility.Collapsed;
             commands.Children.Add(HotkeyText);
+            CaptureButton = ToolbarButton("\uE114", "区域截图", compact, controller.CaptureRegion);
+            commands.Children.Add(CaptureButton);
             LatestButton = ToolbarButton("\uE8C8", "复制最近一张", compact, delegate { controller.CopyLatest(); });
             commands.Children.Add(LatestButton);
             PauseButton = ToolbarButton("\uE769", "暂停收集", compact, delegate { controller.SetCollectionPaused(!controller.Store.Settings.CollectionPaused); });

@@ -9,7 +9,7 @@ using System.Windows;
 
 [assembly: AssemblyTitle("Snapline")]
 [assembly: AssemblyDescription("Screenshots on a line · Windows")]
-[assembly: AssemblyVersion("1.3.3.0")]
+[assembly: AssemblyVersion("1.4.2.0")]
 [assembly: TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]
 
 namespace Snapline
@@ -41,6 +41,7 @@ namespace Snapline
                             app.Dispatcher.BeginInvoke(new Action(controller.Toggle));
                         }, null, -1, false);
                         controller.Welcome();
+                        app.Dispatcher.BeginInvoke(new Action(delegate { controller.ShowAnnouncement(true); }));
                         try { app.Run(); }
                         finally { registration.Unregister(null); }
                     }

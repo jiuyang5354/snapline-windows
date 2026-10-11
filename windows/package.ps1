@@ -16,7 +16,7 @@ foreach ($name in $releaseFiles) {
 }
 Copy-Item -LiteralPath (Join-Path (Split-Path $projectRoot -Parent) 'docs\preview.png') -Destination (Join-Path $portableRoot 'preview.png')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'QA.md') -Destination (Join-Path $portableRoot 'QA.md')
-$sourceFiles = @('.gitignore', 'build.ps1', 'package.ps1', 'make-icon.ps1', 'app.manifest', 'Snapline.exe.config', 'Snapline.ico', 'README.zh-CN.md', 'QA.md')
+$sourceFiles = @('.gitignore', 'build.ps1', 'package.ps1', 'make-icon.ps1', 'app.manifest', 'Snapline.exe.config', 'Snapline.ico', 'README.zh-CN.md', 'QA.md', 'ANNOUNCEMENT.zh-CN.txt')
 foreach ($name in $sourceFiles) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination (Join-Path $sourceRoot ('windows\' + $name))
 }
@@ -32,7 +32,9 @@ foreach ($repositoryFile in @('README.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'N
     Copy-Item -LiteralPath (Join-Path (Split-Path $projectRoot -Parent) $repositoryFile) -Destination (Join-Path $sourceRoot $repositoryFile)
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'docs') | Out-Null
-Copy-Item -LiteralPath (Join-Path (Split-Path $projectRoot -Parent) 'docs\preview.png') -Destination (Join-Path $sourceRoot 'docs\preview.png')
+foreach ($previewFile in @('preview.png', 'settings.png', 'capture.png')) {
+    Copy-Item -LiteralPath (Join-Path (Split-Path $projectRoot -Parent) ('docs\' + $previewFile)) -Destination (Join-Path $sourceRoot ('docs\' + $previewFile))
+}
 $releaseTag = 'v' + [System.Reflection.AssemblyName]::GetAssemblyName((Join-Path $projectRoot 'bin\Snapline.exe')).Version.ToString(3)
 $portableZip = Join-Path $projectRoot ('Snapline-Windows-' + $releaseTag + '.zip')
 $sourceZip = Join-Path $projectRoot ('Snapline-Windows-Source-' + $releaseTag + '.zip')

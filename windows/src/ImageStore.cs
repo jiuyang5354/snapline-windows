@@ -20,8 +20,10 @@ namespace Snapline
         [DataMember] public uint HotkeyModifiers = Hotkey.DefaultModifiers;
         [DataMember] public bool CollectionPaused;
         [DataMember] public bool AutoCheckUpdates = true;
+        [DataMember] public bool IncludeCursor;
         [DataMember] public long UpdateCheckedUtcTicks;
         [DataMember] public string UpdateNotifiedTag;
+        [DataMember] public string AnnouncementSeenVersion;
 
         [OnDeserializing]
         private void HotkeyDefaults(StreamingContext context)

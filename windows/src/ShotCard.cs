@@ -42,7 +42,7 @@ namespace Snapline
             transforms.Children.Add(rotation);
             RenderTransform = transforms;
             AutomationProperties.SetName(this, "截图 " + System.IO.Path.GetFileName(shot.Path));
-            ToolTip = "单击复制 · 双击预览 · 长按编辑 · 拖出使用";
+            ToolTip = "单击 / C 复制 · 双击预览 · 长按 / A 编辑 · D 或 Delete 取下 · 拖出使用";
 
             var image = new Image { Source = shot.Thumbnail, Width = photoWidth, Height = photoHeight, Stretch = Stretch.Uniform,
                 Clip = new RectangleGeometry(new Rect(0, 0, photoWidth, photoHeight), 4, 4) };
@@ -131,7 +131,7 @@ namespace Snapline
             if (e.Handled || FromRemove(e.OriginalSource as DependencyObject)) return;
             e.Handled = true;
             if (e.ClickCount == 2) { click.Stop(); EndPress(); controller.Open(Shot); return; }
-            down = e.GetPosition(this);
+            down = e.GetPosition(controller.Line);
             held = false;
             controller.Busy = true;
             CaptureMouse();
@@ -161,7 +161,7 @@ namespace Snapline
         private void Move(object sender, MouseEventArgs e)
         {
             if (down == null || held || e.LeftButton != MouseButtonState.Pressed) return;
-            var position = e.GetPosition(this);
+            var position = e.GetPosition(controller.Line);
             if (Math.Abs(position.X - down.Value.X) < SystemParameters.MinimumHorizontalDragDistance &&
                 Math.Abs(position.Y - down.Value.Y) < SystemParameters.MinimumVerticalDragDistance) return;
             click.Stop();

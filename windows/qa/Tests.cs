@@ -32,12 +32,27 @@ namespace Snapline
         private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint process);
         [DllImport("user32.dll")]
         private static extern bool PostThreadMessage(uint thread, int message, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")]
+        private static extern bool SetCursorPos(int x, int y);
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+        [DllImport("user32.dll")]
+        private static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extra);
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr window);
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr window, out Native.RECT rectangle);
+        [DllImport("user32.dll")]
+        private static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
 
         [STAThread]
         private static int Main(string[] args)
         {
             if (args.Length == 2 && args[0] == "--network") return CheckNetwork(Path.GetFullPath(args[1]));
-            string output = Path.GetFullPath(args[0]);
+            if (args.Length == 2 && args[0] == "--editor") return CheckPaint(Path.GetFullPath(args[1]));
+            bool featuresOnly = args.Length == 2 && args[0] == "--features";
+            bool announcementsOnly = args.Length == 2 && args[0] == "--announcements";
+            string output = Path.GetFullPath(args[featuresOnly || announcementsOnly ? 1 : 0]);
             string root = Path.Combine(output, "run-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
             Directory.CreateDirectory(root);
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -46,6 +61,16 @@ namespace Snapline
             Controller controller = null;
             try
             {
+                if (featuresOnly) {
+                    clipboardUsed = true; CheckHoverAndCapture(root, output);
+                    File.WriteAllLines(Path.Combine(output, "feature-results.txt"), checks);
+                    Console.WriteLine("PASS " + checks.Count + " feature checks. Output: " + output); return 0;
+                }
+                if (announcementsOnly) {
+                    CheckAnnouncements(root, output); SmokeExecutable(root);
+                    File.WriteAllLines(Path.Combine(output, "announcement-results.txt"), checks);
+                    Console.WriteLine("PASS " + checks.Count + " announcement checks. Output: " + output); return 0;
+                }
                 // Storage behavior: use only generated fixtures in an isolated directory.
                 var store = new ImageStore(Path.Combine(root, "store"));
                 var image = Fixture(700, 420, 0);
@@ -200,7 +225,7 @@ namespace Snapline
                 Pump(200);
                 var narrowCards = ((Canvas)line.Content).Children.OfType<ShotCard>().ToArray();
                 Check(narrowCards.Length == 1 && Canvas.GetLeft(narrowCards[0]) >= 0, "Narrow displays show recent cards without overflow");
-                Check(new[] { line.LatestButton, line.PauseButton, line.SettingsButton }.All(button => {
+                Check(new[] { line.CaptureButton, line.LatestButton, line.PauseButton, line.SettingsButton }.All(button => {
                     var point = button.TranslatePoint(new Point(), line);
                     return button.ActualWidth >= 28 && point.X >= 0 && point.X + button.ActualWidth <= line.ActualWidth && point.Y + button.ActualHeight <= line.ActualHeight;
                 }), "All toolbar actions remain visible and usable on a 400 DIP display");
@@ -231,7 +256,10 @@ namespace Snapline
                 CheckSettings(controller, output);
                 CheckConvenience(controller, root);
                 CheckUpdates(root, output);
+                CheckAnnouncements(root, output);
                 CheckInstallerUpdates(root, output);
+                controller.Busy = true; controller.Line.Tuck(); Pump(300);
+                CheckHoverAndCapture(root, output);
                 controller.Dispose(); controller = null;
                 using (var restarted = new Controller(Path.Combine(root, "live"), false))
                 {
@@ -248,7 +276,7 @@ namespace Snapline
             {
                 Console.Error.WriteLine("HRESULT: 0x" + ex.HResult.ToString("X8"));
                 Console.Error.WriteLine(ex);
-                File.WriteAllLines(Path.Combine(output, "test-results.txt"), checks.Concat(new[] { "FAIL " + ex.ToString() }));
+                File.WriteAllLines(Path.Combine(output, featuresOnly ? "feature-results.txt" : announcementsOnly ? "announcement-results.txt" : "test-results.txt"), checks.Concat(new[] { "FAIL " + ex.ToString() }));
                 return 1;
             }
             finally
@@ -352,12 +380,12 @@ namespace Snapline
                 "The executable targets .NET Framework 4.8 and negotiates HTTPS using operating-system TLS defaults");
             var package = Encoding.UTF8.GetBytes("PK generated update package fixture");
             string stable = ReleaseJson("v1.3.0", package, false, false);
-            string preview = ReleaseJson("v1.4.0", package, false, true);
+            string preview = ReleaseJson("v1.5.0", package, false, true);
             string draft = ReleaseJson("v8.0.0", package, true, false);
             byte[] json = Encoding.UTF8.GetBytes("[" + stable + "," + draft + "," + preview + "]");
             var release = Updates.Parse(json, Updates.CurrentVersion);
-            Check(release.Tag == "v1.4.0" && release.Prerelease, "Update checks select the highest published version including prereleases, skipping drafts");
-            Check(Updates.Parse(json, new Version(1, 4, 0)) == null, "Equal and older release versions do not prompt for updates");
+            Check(release.Tag == "v1.5.0" && release.Prerelease, "Update checks select the highest published version including prereleases, skipping drafts");
+            Check(Updates.Parse(json, new Version(1, 5, 0)) == null, "Equal and older release versions do not prompt for updates");
             Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + stable.Replace("github.com/jiuyang5354", "github.com/other-owner") + "]"), Updates.CurrentVersion) == null,
                 "A package URL outside the publishing repository is rejected");
             Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + stable.Replace("sha256:", "sha1:") + "]"), Updates.CurrentVersion) == null,
@@ -377,7 +405,7 @@ namespace Snapline
             using (var updater = new Updates(handler))
             {
                 var found = updater.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
-                Check(found.Tag == "v1.4.0" && handler.Headers, "HTTP update pipeline sends an app user-agent without an account token");
+                Check(found.Tag == "v1.5.0" && handler.Headers, "HTTP update pipeline sends an app user-agent without an account token");
                 string destination = Path.Combine(root, "更新 包.zip");
                 updater.DownloadAsync(found, destination, null, CancellationToken.None).GetAwaiter().GetResult();
                 Check(File.ReadAllBytes(destination).SequenceEqual(package), "Verified downloads arrive intact at a Unicode destination");
@@ -459,6 +487,417 @@ namespace Snapline
             }
         }
 
+        private static void AnnouncementAction(Action open, Action<AnnouncementWindow> inspect)
+        {
+            Exception failure = null; bool shown = false;
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            try {
+                timer.Tick += delegate {
+                    var dialog = Application.Current.Windows.OfType<AnnouncementWindow>().FirstOrDefault(window => window.IsVisible);
+                    if (dialog == null) return;
+                    timer.Stop(); shown = true;
+                    try { inspect(dialog); }
+                    catch (Exception ex) { failure = ex; }
+                    finally { if (dialog.IsVisible) dialog.Close(); }
+                };
+                timer.Start(); open();
+            }
+            finally { timer.Stop(); }
+            if (failure != null) throw failure;
+            if (!shown) throw new Exception("The announcement action did not show its real window.");
+        }
+
+        private static void CheckAnnouncements(string root, string output)
+        {
+            string data = Path.Combine(root, "announcements");
+            var original = new ImageStore(data);
+            original.Settings.ListenClipboard = false; original.Settings.CollectionPaused = true;
+            original.Settings.AutoCheckUpdates = false; original.Settings.IncludeCursor = true;
+            original.Settings.HotkeyKey = FreeHotkey(7); original.Settings.HotkeyModifiers = 7;
+            var shot = original.AddBitmap(Fixture(420, 280, 4));
+            string settingsPath = Path.Combine(data, "settings.json");
+            string oldSettings = File.ReadAllText(settingsPath);
+            oldSettings = System.Text.RegularExpressions.Regex.Replace(oldSettings, "\\\"AnnouncementSeenVersion\\\":null,?", "");
+            File.WriteAllText(settingsPath, oldSettings);
+            var handler = new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") };
+            using (var controller = new Controller(data, false, new Updates(handler)))
+            {
+                Check(AnnouncementWindow.Due(controller.Store.Settings) && controller.Store.Settings.AnnouncementSeenVersion == null,
+                    "Legacy settings without announcement history show the current version once");
+                AnnouncementAction(delegate { controller.ShowAnnouncement(true); }, delegate(AnnouncementWindow dialog) {
+                    Check(dialog.Notes.IsReadOnly && dialog.Notes.Text.Contains("更新公告") && dialog.Notes.Text.Contains("Alejandro Buján"),
+                        "The real announcement displays bundled readable release notes and upstream attribution offline");
+                    Check(controller.Busy && !controller.Line.Revealed, "An open announcement suspends shelf input and keeps the shelf hidden");
+                    controller.ShowAnnouncement();
+                    Check(Application.Current.Windows.OfType<AnnouncementWindow>().Count(window => window.IsVisible) == 1,
+                        "Reopening while the announcement is visible reuses the existing dialog without duplicates");
+                    dialog.UpdateLayout();
+                    var view = (FrameworkElement)dialog.Content;
+                    var image = new RenderTargetBitmap((int)Math.Ceiling(view.ActualWidth * 1.5), (int)Math.Ceiling(view.ActualHeight * 1.5), 144, 144, PixelFormats.Pbgra32);
+                    var drawing = new DrawingVisual();
+                    using (var dc = drawing.RenderOpen()) {
+                        dc.DrawRectangle(dialog.Background, null, new Rect(0, 0, view.ActualWidth, view.ActualHeight));
+                        dc.DrawRectangle(new VisualBrush(view), null, new Rect(0, 0, view.ActualWidth, view.ActualHeight));
+                    }
+                    image.Render(drawing); File.WriteAllBytes(Path.Combine(output, "announcement.png"), ImageStore.Png(image));
+                    Check(dialog.Dismiss.IsDefault && dialog.Dismiss.IsCancel && dialog.Dismiss.IsVisible &&
+                        dialog.Notes.ActualHeight > 150 && dialog.Notes.VerticalScrollBarVisibility == ScrollBarVisibility.Auto,
+                        "Announcement content scrolls while its Enter and Escape dismissal button remains accessible");
+                    dialog.Dismiss.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                });
+                var saved = new ImageStore(data);
+                Check(saved.Settings.AnnouncementSeenVersion == AnnouncementWindow.Version && !AnnouncementWindow.Due(saved.Settings),
+                    "Closing the real announcement persists its version and prevents repeated automatic display after reload");
+                Check(!saved.Settings.ListenClipboard && saved.Settings.CollectionPaused && !saved.Settings.AutoCheckUpdates && saved.Settings.IncludeCursor &&
+                    saved.Settings.HotkeyKey == original.Settings.HotkeyKey && saved.Items.Count == 1 && File.Exists(shot.Path),
+                    "Reading an announcement preserves existing collection, cursor, hotkey and screenshot settings");
+                string unchanged = File.ReadAllText(settingsPath);
+                controller.ShowAnnouncement(true);
+                Check(!controller.Busy && !Application.Current.Windows.OfType<AnnouncementWindow>().Any(window => window.IsVisible) && File.ReadAllText(settingsPath) == unchanged,
+                    "A repeated automatic request returns without a dialog or another settings write");
+                var tray = (Forms.NotifyIcon)typeof(Controller).GetField("tray", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(controller);
+                AnnouncementAction(delegate { tray.ContextMenuStrip.Items.OfType<Forms.ToolStripMenuItem>().Single(item => item.Text == "更新公告…").PerformClick(); },
+                    delegate(AnnouncementWindow dialog) {
+                        Check(!AnnouncementWindow.Due(controller.Store.Settings), "The real tray command reopens an already-read announcement");
+                        IntPtr handle = new WindowInteropHelper(dialog).Handle; SetForegroundWindow(handle); dialog.Notes.Focus(); Pump(80);
+                        if (Native.GetForegroundWindow() != handle) throw new Exception("Escape probe did not target its own announcement window.");
+                        TypeKey(0x1b);
+                        Check(!dialog.IsVisible, "The real Escape key closes the announcement without exiting Snapline");
+                    });
+                DialogAction(controller, delegate(SettingsWindow settings) {
+                    settings.ShowPage("About");
+                    AnnouncementAction(delegate { settings.Part<Button>("ViewAnnouncement").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); },
+                        delegate(AnnouncementWindow dialog) {
+                            Check(dialog.Owner == settings, "The real About button opens the announcement over its settings owner");
+                            IntPtr handle = new WindowInteropHelper(dialog).Handle; SetForegroundWindow(handle); dialog.Notes.Focus(); Pump(80);
+                            if (Native.GetForegroundWindow() != handle) throw new Exception("Enter probe did not target its own announcement window.");
+                            TypeKey(0x0d);
+                            Check(!dialog.IsVisible, "The real Enter key dismisses the announcement while its settings window remains open");
+                        });
+                    Check(controller.Busy && settings.IsVisible, "Closing the announcement keeps its parent settings dialog active and shelf input suspended");
+                });
+                controller.Busy = false;
+                controller.Store.Settings.AnnouncementSeenVersion = "1.4.1"; controller.Store.Save();
+                Check(AnnouncementWindow.Due(new ImageStore(data).Settings), "A previously read older version still requires the new version announcement");
+                using (var locked = new FileStream(settingsPath + ".tmp", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+                    AnnouncementAction(delegate { controller.ShowAnnouncement(true); }, delegate(AnnouncementWindow dialog) { });
+                Check(controller.Store.Settings.AnnouncementSeenVersion == "1.4.1" && new ImageStore(data).Settings.AnnouncementSeenVersion == "1.4.1",
+                    "A failed history write restores the old record so the announcement can appear on the next launch");
+                Check(handler.Calls == 0, "Automatic and manual local announcements require no update network requests");
+            }
+        }
+
+        private static void PressKey(int key, bool up = false)
+        { keybd_event((byte)key, 0, up ? 2u : 0u, UIntPtr.Zero); Pump(35); }
+
+        private static void TypeKey(int key) { PressKey(key); PressKey(key, true); }
+
+        private static void PointAt(Point point)
+        { SetCursorPos((int)Math.Round(point.X), (int)Math.Round(point.Y)); Pump(80); }
+
+        private static ShotCard HoverCard(Controller controller)
+        {
+            bool busy = controller.Busy; controller.Busy = true;
+            controller.Line.Reveal(Forms.Screen.FromPoint(Native.Cursor())); Pump(1400);
+            var card = ((Canvas)controller.Line.Content).Children.OfType<ShotCard>().First();
+            var photo = Descendants(card).OfType<Image>().Single(image => image.Source == card.Shot.Thumbnail);
+            PointAt(photo.PointToScreen(new Point(photo.ActualWidth / 2, photo.ActualHeight / 2))); Pump(200);
+            controller.Busy = busy;
+            return card;
+        }
+
+        private static void CheckHoverAndCapture(string root, string output)
+        {
+            var cursorBefore = Native.Cursor();
+            int edits = 0; string editor = null, editedFile = null;
+            string featureRoot = Path.Combine(root, "hover-and-capture");
+            var preferences = new ImageStore(featureRoot);
+            preferences.Settings.ListenClipboard = false; preferences.Settings.CollectionPaused = true;
+            preferences.Settings.AutoCheckUpdates = false; preferences.Settings.HotkeyKey = FreeHotkey(7); preferences.Settings.HotkeyModifiers = 7;
+            preferences.Save();
+            try
+            {
+                using (var controller = new Controller(featureRoot, false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }),
+                    delegate(string path, string arguments) { edits++; editor = path; editedFile = arguments; }))
+                using (var host = new Forms.Form { Text = "Snapline QA keyboard target", Bounds = new System.Drawing.Rectangle(100, 280, 500, 250), StartPosition = Forms.FormStartPosition.Manual, AutoScaleMode = Forms.AutoScaleMode.None })
+                using (var text = new Forms.TextBox { Dock = Forms.DockStyle.Fill, ImeMode = Forms.ImeMode.Disable })
+                {
+                    host.Controls.Add(text); host.Show(); host.Activate(); text.Focus(); Pump(100);
+                    var textPoint = text.PointToScreen(new System.Drawing.Point(30, 30));
+                    var keyboardPoint = new Point(textPoint.X, textPoint.Y);
+                    PointAt(keyboardPoint); mouse_event(2, 0, 0, 0, UIntPtr.Zero); mouse_event(4, 0, 0, 0, UIntPtr.Zero); Pump(80);
+                    SetForegroundWindow(host.Handle); text.Focus(); Pump(80);
+                    if (Native.GetForegroundWindow() != host.Handle) Console.WriteLine("Keyboard probe host=" + host.Handle + " foreground=" + Native.GetForegroundWindow() + " bounds=" + host.Bounds + " cursor=" + Native.Cursor());
+                    Check(Native.GetForegroundWindow() == host.Handle, "Keyboard passthrough probes target only their own generated test window");
+                    Check(controller.Hover.Registered, "A real native keyboard hook supports hover actions without activating the screenshot shelf");
+                    string firstPath = Path.Combine(root, "悬停 中文 图片.png"), secondPath = Path.Combine(root, "hover-second.png");
+                    File.WriteAllBytes(firstPath, ImageStore.Png(Fixture(420, 280, 8)));
+                    File.WriteAllBytes(secondPath, ImageStore.Png(Fixture(500, 310, 9)));
+                    var first = controller.Store.AddFile(firstPath, true); controller.Store.AddFile(secondPath, true);
+                    controller.Busy = false;
+                    HoverCard(controller);
+                    IntPtr foreground = Native.GetForegroundWindow();
+                    TypeKey(0x43);
+                    var copied = BitmapFrame.Create((Stream)Clipboard.GetData("PNG"), BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                    Check(ImageStore.Digest(copied) == first.Hash && text.Text == "" && Native.GetForegroundWindow() == foreground,
+                        "Native C copies the hovered image rather than the latest image, consumes its key and preserves foreground focus");
+                    PressKey(0x11); TypeKey(0x41); PressKey(0x11, true);
+                    Check(edits == 0, "Ctrl combinations over a screenshot remain available to the foreground application");
+                    controller.Busy = true; TypeKey(0x41);
+                    Check(edits == 0 && text.Text.ToLowerInvariant().Contains("a"), "Hover edit stays disabled during another operation instead of taking keyboard input");
+                    controller.Busy = false; text.Clear();
+                    PointAt(keyboardPoint); PressKey(0x43);
+                    uint unchanged = Native.GetClipboardSequenceNumber();
+                    HoverCard(controller); PressKey(0x43); PressKey(0x43, true);
+                    Check(Native.GetClipboardSequenceNumber() == unchanged && text.Text.Length >= 2,
+                        "Holding a key outside the shelf then moving onto a photo never starts an action from key repeat");
+                    HoverCard(controller); PressKey(0x44); PressKey(0x44); PressKey(0x44, true);
+                    Check(controller.Store.Items.Count == 1 && File.Exists(firstPath) && File.Exists(secondPath),
+                        "D takes down only the hovered external photo and key repeat cannot remove its neighbor");
+                    HoverCard(controller); TypeKey(0x2e);
+                    Check(controller.Store.Items.Count == 0 && File.Exists(secondPath), "Delete takes down an external screenshot while retaining its original file");
+                    first = controller.Store.AddFile(firstPath, true); HoverCard(controller); TypeKey(0x41);
+                    Check(edits == 1 && Path.IsPathRooted(editor) && Path.GetFileName(editor).Equals("mspaint.exe", StringComparison.OrdinalIgnoreCase) &&
+                        editedFile == "\"" + firstPath + "\"" && !controller.Line.Revealed,
+                        "Native A tucks the shelf and selects Paint with the exact quoted Unicode image path");
+                    Check(File.Exists(editor), "Editing resolves an existing Paint entry point, including WindowsApps when System32 Paint is absent");
+                    TypeKey(0x41);
+                    Check(edits == 1, "A is ordinary keyboard input again after the shelf is hidden");
+                    var card = HoverCard(controller);
+                    var photo = Descendants(card).OfType<Image>().Single(image => image.Source == card.Shot.Thumbnail);
+                    PointAt(photo.PointToScreen(new Point(photo.ActualWidth - 2, photo.ActualHeight - 2))); Pump(200);
+                    var pointer = Native.Cursor();
+                    Check(controller.Line.ShotAt(new Point(pointer.X, pointer.Y)) == card,
+                        "Long-press regression targets the actual photo rather than a transparent glass corner");
+                    int before = edits;
+                    mouse_event(2, 0, 0, 0, UIntPtr.Zero);
+                    var releaseMouse = Task.Run(delegate { Thread.Sleep(700); mouse_event(4, 0, 0, 0, UIntPtr.Zero); });
+                    Pump(1000); releaseMouse.GetAwaiter().GetResult();
+                    Check(edits == before + 1, "A stationary long press near the photo edge opens the editor despite the shrinking animation");
+
+                    controller.Busy = true;
+                    Check(!controller.Store.Settings.IncludeCursor, "Existing settings retain a default-off cursor option and the original collection preferences");
+                    DialogAction(controller, delegate(SettingsWindow dialog) {
+                        dialog.ShowPage("Capture"); dialog.Part<CheckBox>("CursorToggle").IsChecked = true;
+                        dialog.Part<Button>("CancelSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    });
+                    Check(!controller.Store.Settings.IncludeCursor && !new ImageStore(featureRoot).Settings.IncludeCursor,
+                        "Canceling the real cursor settings page preserves its saved value");
+                    DialogAction(controller, delegate(SettingsWindow dialog) {
+                        dialog.ShowPage("Capture"); dialog.Part<CheckBox>("CursorToggle").IsChecked = true;
+                        dialog.Part<Button>("SaveSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    });
+                    Check(controller.Store.Settings.IncludeCursor && new ImageStore(featureRoot).Settings.IncludeCursor,
+                        "The real settings Save persists cursor inclusion across a reload");
+                    string error;
+                    using (var locked = new FileStream(Path.Combine(featureRoot, "settings.json.tmp"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+                        Check(!controller.ApplyPreferences(false, true, false, false, controller.Store.Settings.WatchFolder,
+                            controller.Sink.HotkeyKey, controller.Sink.HotkeyModifiers, out error) && controller.Store.Settings.IncludeCursor,
+                            "Settings write failure restores the previously saved cursor preference");
+                    controller.Line.Reveal(Forms.Screen.FromPoint(Native.Cursor())); Pump(400);
+                    Check(controller.Line.CaptureButton.IsEnabled && Hit(new WindowInteropHelper(controller.Line).Handle,
+                        controller.Line.CaptureButton.PointToScreen(new Point(10, 10))) == 1,
+                        "The new screenshot toolbar command is visible and accepts native mouse input");
+                    controller.Line.Tuck(); Pump(300);
+                    CheckRegionPicker(controller, output);
+                }
+            }
+            finally {
+                foreach (int key in new[] { 0x41, 0x43, 0x44, 0x2e, 0x11 }) keybd_event((byte)key, 0, 2, UIntPtr.Zero);
+                mouse_event(4, 0, 0, 0, UIntPtr.Zero); SetCursorPos(cursorBefore.X, cursorBefore.Y);
+            }
+        }
+
+        private static int CheckPaint(string output)
+        {
+            Directory.CreateDirectory(output);
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            string root = Path.Combine(output, "data");
+            string stem = "Snapline 编辑验证 " + Guid.NewGuid().ToString("N").Substring(0, 8);
+            string path = Path.Combine(output, stem + ".png");
+            var before = Process.GetProcessesByName("mspaint").Select(process => process.Id).ToArray();
+            Process paint = null;
+            try
+            {
+                var settings = new ImageStore(root);
+                settings.Settings.ListenClipboard = false; settings.Settings.CollectionPaused = true;
+                settings.Settings.AutoCheckUpdates = false; settings.Settings.HotkeyKey = FreeHotkey(7); settings.Settings.HotkeyModifiers = 7; settings.Save();
+                byte[] png = ImageStore.Png(Fixture(640, 360, 8)); File.WriteAllBytes(path, png);
+                using (var controller = new Controller(root, false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") })))
+                {
+                    controller.Busy = true;
+                    var shot = controller.Store.AddFile(path, true);
+                    Check(File.Exists(Controller.PaintPath()), "Real editing uses an existing installed Paint entry point");
+                    var card = new ShotCard(shot, controller, null);
+                    card.ContextMenu.Items.OfType<MenuItem>().Single(item => (string)item.Header == "用画图编辑").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                    var deadline = DateTime.UtcNow.AddSeconds(15);
+                    while (paint == null && DateTime.UtcNow < deadline)
+                    {
+                        Pump(200);
+                        paint = Process.GetProcessesByName("mspaint").FirstOrDefault(process => !before.Contains(process.Id) &&
+                            process.MainWindowHandle != IntPtr.Zero && process.MainWindowTitle.StartsWith(stem, StringComparison.OrdinalIgnoreCase));
+                    }
+                    Check(paint != null, "The actual Edit menu event opens a new Paint window with the generated Unicode image filename");
+                    Pump(900); paint.Refresh();
+                    Native.RECT rectangle;
+                    if (GetWindowRect(paint.MainWindowHandle, out rectangle))
+                    {
+                        using (var image = new System.Drawing.Bitmap(rectangle.Right - rectangle.Left, rectangle.Bottom - rectangle.Top, System.Drawing.Imaging.PixelFormat.Format24bppRgb))
+                        using (var graphics = System.Drawing.Graphics.FromImage(image))
+                        {
+                            IntPtr dc = graphics.GetHdc(); bool rendered;
+                            try { rendered = PrintWindow(paint.MainWindowHandle, dc, 2); }
+                            finally { graphics.ReleaseHdc(dc); }
+                            if (rendered) image.Save(Path.Combine(output, "paint-window.png"), System.Drawing.Imaging.ImageFormat.Png);
+                        }
+                    }
+                    Check(File.ReadAllBytes(path).SequenceEqual(png), "Opening the real Paint editor preserves the source image bytes");
+                }
+                paint.Refresh();
+                Check(paint.MainWindowTitle.StartsWith(stem, StringComparison.OrdinalIgnoreCase) && paint.CloseMainWindow() && paint.WaitForExit(4000),
+                    "Only the new Paint process showing the generated test image is closed cleanly");
+                File.WriteAllLines(Path.Combine(output, "editor-results.txt"), checks);
+                Console.WriteLine("PASS " + checks.Count + " real editor checks. Output: " + output); return 0;
+            }
+            catch (Exception ex) {
+                Console.Error.WriteLine(ex); File.WriteAllLines(Path.Combine(output, "editor-results.txt"), checks.Concat(new[] { "FAIL " + ex.ToString() })); return 1;
+            }
+            finally {
+                if (paint != null) {
+                    paint.Refresh();
+                    if (!paint.HasExited && !before.Contains(paint.Id) && paint.MainWindowTitle.StartsWith(stem, StringComparison.OrdinalIgnoreCase)) paint.CloseMainWindow();
+                    paint.Dispose();
+                }
+                app.Shutdown();
+            }
+        }
+
+        private static Forms.DialogResult PickerAction(RegionCapture picker, Action action)
+        {
+            Exception failure = null;
+            using (var timer = new Forms.Timer { Interval = 100 })
+            {
+                timer.Tick += delegate {
+                    timer.Stop();
+                    try { action(); }
+                    catch (Exception ex) { failure = ex; }
+                    finally { if (!picker.IsDisposed && picker.Visible) picker.Close(); }
+                };
+                timer.Start();
+                var result = picker.ShowDialog();
+                if (failure != null) throw failure;
+                return result;
+            }
+        }
+
+        private static void SelectRegion(RegionCapture picker, int x1, int y1, int x2, int y2)
+        {
+            var start = picker.PointToScreen(new System.Drawing.Point(x1, y1));
+            var end = picker.PointToScreen(new System.Drawing.Point(x2, y2));
+            SetCursorPos(start.X, start.Y); Pump(50); mouse_event(2, 0, 0, 0, UIntPtr.Zero); Pump(50);
+            SetCursorPos(end.X, end.Y); Pump(50); mouse_event(4, 0, 0, 0, UIntPtr.Zero); Pump(50);
+        }
+
+        private static void CheckRegionPicker(Controller controller, string output)
+        {
+            var bounds = new System.Drawing.Rectangle(120, 280, 480, 280);
+            using (var desktop = new System.Drawing.Bitmap(bounds.Width, bounds.Height))
+            {
+                using (var graphics = System.Drawing.Graphics.FromImage(desktop)) {
+                    graphics.Clear(System.Drawing.Color.FromArgb(36, 112, 198));
+                    graphics.FillRectangle(System.Drawing.Brushes.Orange, 20, 80, 70, 100);
+                }
+                BitmapSource plain;
+                using (var picker = new RegionCapture(desktop, bounds, false))
+                {
+                    var result = PickerAction(picker, delegate { SelectRegion(picker, 40, 70, 260, 230); });
+                    plain = picker.Result;
+                    Check(result == Forms.DialogResult.OK && plain != null && plain.PixelWidth == 220 && plain.PixelHeight == 160,
+                        "Actual mouse drag with cursor inclusion off immediately captures the selected pixel dimensions");
+                    var expected = ScreenCapture.Crop(desktop, bounds, picker.Selection, false);
+                    Check(ImageStore.Digest(plain) == ImageStore.Digest(expected), "Region output retains original pixels without the picker shade or selection border");
+                    File.WriteAllBytes(Path.Combine(output, "capture-without-cursor.png"), ImageStore.Png(plain));
+                }
+                using (var picker = new RegionCapture(desktop, bounds, true))
+                {
+                    var result = PickerAction(picker, delegate {
+                        SelectRegion(picker, 260, 230, 40, 70);
+                        Check(picker.Visible && picker.Result == null && picker.Selection == new System.Drawing.Rectangle(40, 70, 220, 160),
+                            "Reverse-direction selection normalizes bounds and waits for cursor placement when enabled");
+                        SetCursorPos(bounds.Left + 120, bounds.Top + 135); Pump(50);
+                        using (var image = new System.Drawing.Bitmap(picker.Width, picker.Height)) {
+                            picker.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, image.Width, image.Height));
+                            image.Save(Path.Combine(output, "region-picker.png"));
+                        }
+                        TypeKey(0x0d);
+                    });
+                    Check(result == Forms.DialogResult.OK && picker.Result != null && ImageStore.Digest(picker.Result) != ImageStore.Digest(plain),
+                        "Real Enter confirmation overlays the actual Windows mouse cursor onto the frozen selected image");
+                    File.WriteAllBytes(Path.Combine(output, "capture-with-cursor.png"), ImageStore.Png(picker.Result));
+                    int count = controller.Store.Items.Count;
+                    controller.AcceptCapture(picker.Result);
+                    Check(controller.Store.Items.Count == count + 1 && controller.Store.Settings.CollectionPaused &&
+                        !controller.Store.Settings.ListenClipboard && Clipboard.ContainsImage(),
+                        "Explicit region capture saves and copies an image even when automatic collection is paused and clipboard capture is off");
+                    Check(ImageStore.Digest(ImageStore.Load(controller.Store.Items.Last().Path, 0)) == ImageStore.Digest(picker.Result) &&
+                        ImageStore.Digest(BitmapFrame.Create((Stream)Clipboard.GetData("PNG"), BitmapCreateOptions.None, BitmapCacheOption.OnLoad)) == ImageStore.Digest(picker.Result),
+                        "Stored PNG and copied PNG both preserve the captured cursor and exact screenshot pixels");
+                    controller.AcceptCapture(picker.Result);
+                    Check(controller.Store.Items.Count == count + 1, "Repeating an identical manual capture copies it without adding a duplicate card");
+                }
+                controller.Line.Tuck(); Pump(300);
+                using (var picker = new RegionCapture(desktop, bounds, true))
+                {
+                    var result = PickerAction(picker, delegate { SelectRegion(picker, 40, 70, 40, 70); Check(picker.Result == null && picker.Selection.IsEmpty, "A click without a valid selection does not create a screenshot"); TypeKey(0x1b); });
+                    Check(result == Forms.DialogResult.Cancel && picker.Result == null, "Real Escape cancels the region picker without returning or saving an image");
+                }
+                var selected = new System.Drawing.Rectangle(40, 70, 220, 160);
+                SetCursorPos(bounds.Right + 100, bounds.Bottom + 100); Pump(40);
+                Check(ImageStore.Digest(ScreenCapture.Crop(desktop, bounds, selected, true)) == ImageStore.Digest(plain),
+                    "A cursor outside the selected area leaves screenshot pixels unchanged");
+                var translated = new System.Drawing.Rectangle(bounds.Left - 800, bounds.Top - 600, bounds.Width, bounds.Height);
+                Check(ImageStore.Digest(ScreenCapture.Crop(desktop, translated, selected, false)) == ImageStore.Digest(plain),
+                    "Region cropping preserves pixel dimensions for virtual desktops with negative coordinates");
+            }
+            using (var host = new Forms.Form { Bounds = bounds, StartPosition = Forms.FormStartPosition.Manual, AutoScaleMode = Forms.AutoScaleMode.None, FormBorderStyle = Forms.FormBorderStyle.None, BackColor = System.Drawing.Color.FromArgb(35, 100, 170), TopMost = true })
+            {
+                host.Show(); Pump(150);
+                using (var live = ScreenCapture.Read(new System.Drawing.Rectangle(bounds.Left + 30, bounds.Top + 90, 40, 30)))
+                    Check(live.GetPixel(20, 15).ToArgb() == host.BackColor.ToArgb(), "Live GDI capture reads actual generated on-screen content at its physical location");
+                controller.Busy = true; controller.Line.Reveal(Forms.Screen.FromPoint(Native.Cursor())); Pump(350);
+                controller.Store.Settings.IncludeCursor = false; controller.Busy = false;
+                int count = controller.Store.Items.Count;
+                bool selected = false; Exception failure = null;
+                using (var timer = new Forms.Timer { Interval = 75 })
+                {
+                    timer.Tick += delegate {
+                        var picker = Forms.Application.OpenForms.OfType<RegionCapture>().FirstOrDefault();
+                        if (picker == null) return;
+                        timer.Stop();
+                        try {
+                            Check(!controller.Line.IsVisible, "The actual screenshot command waits for the shelf to disappear before sampling the desktop");
+                            var start = picker.PointToClient(new System.Drawing.Point(bounds.Left + 100, bounds.Top + 100));
+                            var end = picker.PointToClient(new System.Drawing.Point(bounds.Left + 300, bounds.Top + 220));
+                            SelectRegion(picker, start.X, start.Y, end.X, end.Y); selected = true;
+                        }
+                        catch (Exception ex) { failure = ex; if (!picker.IsDisposed) picker.Close(); }
+                    };
+                    timer.Start();
+                    controller.Line.CaptureButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump(1800);
+                    if (failure != null) throw failure;
+                }
+                var captured = ImageStore.Load(controller.Store.Items.Last().Path, 0);
+                Check(selected && controller.Store.Items.Count == count + 1 && captured.PixelWidth == 200 && captured.PixelHeight == 120 && !controller.Busy,
+                    "The real toolbar event completes the asynchronous capture, save and copy pipeline while automatic collection stays paused");
+                var pixel = new byte[4];
+                new FormatConvertedBitmap(captured, PixelFormats.Bgra32, null, 0).CopyPixels(new Int32Rect(100, 60, 1, 1), pixel, 4, 0);
+                Check(pixel.SequenceEqual(new byte[] { 170, 100, 35, 255 }) &&
+                    ImageStore.Digest(BitmapFrame.Create((Stream)Clipboard.GetData("PNG"), BitmapCreateOptions.None, BitmapCacheOption.OnLoad)) == ImageStore.Digest(captured),
+                    "The complete screenshot command retains the generated window pixels and the same lossless PNG on the clipboard");
+                host.Close();
+            }
+        }
+
         private static void CheckInstallerUpdates(string root, string output)
         {
             string registered = Path.Combine(root, "安装 目录");
@@ -469,16 +908,16 @@ namespace Snapline
             Check(!Updates.InstalledAt(Path.Combine(registered, "Snapline.exe"), null) &&
                 !Updates.InstalledAt(Path.Combine(registered, "Snapline.exe"), "relative-directory"), "Missing or relative installation registration does not enable EXE update mode");
             var package = Encoding.UTF8.GetBytes("MZ generated installer fixture; never executed");
-            string both = "[" + ReleaseJson("v1.4.0", package, false, true, true) + "]";
+            string both = "[" + ReleaseJson("v1.5.0", package, false, true, true) + "]";
             var json = Encoding.UTF8.GetBytes(both);
             var release = Updates.Parse(json, Updates.CurrentVersion, true);
-            Check(release != null && release.IsInstaller && release.Package.Name == "Snapline-Windows-Setup-v1.4.0.exe",
+            Check(release != null && release.IsInstaller && release.Package.Name == "Snapline-Windows-Setup-v1.5.0.exe",
                 "Installed clients select the EXE installer from a feed containing both update formats");
-            Check(Updates.Parse(json, new Version(1, 3, 2)).Package.Name == "Snapline-Windows-v1.4.0.zip",
+            Check(Updates.Parse(json, new Version(1, 3, 2)).Package.Name == "Snapline-Windows-v1.5.0.zip",
                 "Portable and legacy ZIP clients retain a compatible package in the same update feed");
-            Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + ReleaseJson("v1.4.0", package, false, true) + "]"), Updates.CurrentVersion, true) == null,
+            Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + ReleaseJson("v1.5.0", package, false, true) + "]"), Updates.CurrentVersion, true) == null,
                 "Installed clients never silently substitute a ZIP when the verified installer is missing");
-            Check(Updates.Parse(Encoding.UTF8.GetBytes(both.Replace("/Snapline-Windows-Setup-v1.4.0.exe", "/other.exe")), Updates.CurrentVersion, true) == null,
+            Check(Updates.Parse(Encoding.UTF8.GetBytes(both.Replace("/Snapline-Windows-Setup-v1.5.0.exe", "/other.exe")), Updates.CurrentVersion, true) == null,
                 "Installer download URLs must match the exact release asset in the publishing repository");
             Check(Updates.Parse(Encoding.UTF8.GetBytes(both.Replace("sha256:", "sha1:")), Updates.CurrentVersion, true) == null,
                 "Installer assets without a complete SHA-256 digest are rejected");
@@ -749,7 +1188,7 @@ namespace Snapline
                     "Save button renders light text on its dark surface");
                 var closeText = Descendants(dialog.Part<Button>("CloseSettings")).OfType<TextBlock>().First();
                 Check(closeText.FontFamily.Source == "Segoe MDL2 Assets", "Close button renders using the real Windows icon font");
-                foreach (string page in new[] { "General", "Keys", "Storage", "About" }) {
+                foreach (string page in new[] { "General", "Capture", "Keys", "Storage", "About" }) {
                     dialog.ShowPage(page); dialog.UpdateLayout();
                     var bounds = (Grid)dialog.View.FindName("Pages");
                     var content = dialog.Part<StackPanel>(page + "Page");
@@ -784,10 +1223,10 @@ namespace Snapline
             Check(controller.Line.StatusText.Text == "收集已暂停", "Saved settings update the real shelf status");
             string error;
             using (var locked = new FileStream(Path.Combine(controller.Store.Root, "settings.json.tmp"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
-                Check(!controller.ApplyPreferences(true, false, true, controller.Store.Settings.WatchFolder, FreeHotkey(7), 7, out error) &&
+                Check(!controller.ApplyPreferences(true, false, true, false, controller.Store.Settings.WatchFolder, FreeHotkey(7), 7, out error) &&
                     !controller.Store.Settings.ListenClipboard && controller.Store.Settings.CollectionPaused && !controller.Store.Settings.AutoCheckUpdates,
                     "Settings write failure rolls back all collection preferences as well as the shortcut");
-            Check(controller.ApplyPreferences(originalClipboard, originalPaused, originalAutomatic, controller.Store.Settings.WatchFolder, controller.Sink.HotkeyKey, controller.Sink.HotkeyModifiers, out error),
+            Check(controller.ApplyPreferences(originalClipboard, originalPaused, originalAutomatic, controller.Store.Settings.IncludeCursor, controller.Store.Settings.WatchFolder, controller.Sink.HotkeyKey, controller.Sink.HotkeyModifiers, out error),
                 "Settings can save normally after a write failure");
             using (var run = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
                 Check((run == null ? null : run.GetValue("Snapline") as string) == runValue, "Opening, canceling and saving preferences leaves real startup entry untouched");
@@ -923,10 +1362,23 @@ namespace Snapline
             File.WriteAllBytes(path, ImageStore.Png(image));
         }
 
+        private static IntPtr AnnouncementHandle(Process process)
+        {
+            IntPtr window = IntPtr.Zero;
+            while ((window = FindWindowEx(IntPtr.Zero, window, null, "Snapline · 更新公告")) != IntPtr.Zero) {
+                uint owner; GetWindowThreadProcessId(window, out owner);
+                if (owner == process.Id) return window;
+            }
+            return IntPtr.Zero;
+        }
+
         private static void SmokeExecutable(string root)
         {
             string executable = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Snapline.exe");
             string dataRoot = Path.Combine(root, "executable-smoke");
+            var settings = new ImageStore(dataRoot);
+            settings.Settings.ListenClipboard = false; settings.Settings.AutoCheckUpdates = false;
+            settings.Settings.CollectionPaused = true; settings.Settings.HotkeyKey = FreeHotkey(7); settings.Settings.HotkeyModifiers = 7; settings.Save();
             var launch = new ProcessStartInfo(executable, "--data-dir \"" + dataRoot + "\"") {
                 UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden
             };
@@ -937,6 +1389,12 @@ namespace Snapline
                     process.WaitForInputIdle(4000);
                     Pump(700);
                     Check(!process.HasExited && Directory.Exists(Path.Combine(dataRoot, "Inbox")), "Released EXE starts with an isolated data directory");
+                    IntPtr announcement = AnnouncementHandle(process);
+                    var deadline = DateTime.UtcNow.AddSeconds(4);
+                    while (announcement == IntPtr.Zero && !process.HasExited && DateTime.UtcNow < deadline) { Pump(100); announcement = AnnouncementHandle(process); }
+                    Check(announcement != IntPtr.Zero, "The actual released EXE automatically displays the current announcement on its first launch");
+                    SendMessage(announcement, 0x10, IntPtr.Zero, IntPtr.Zero); Pump(200);
+                    Check(!AnnouncementWindow.Due(new ImageStore(dataRoot).Settings), "Closing the actual EXE announcement saves its version in the isolated settings");
                     using (var second = Process.Start(launch))
                     {
                         Check(second.WaitForExit(4000) && second.ExitCode == 0 && !process.HasExited, "Launching EXE twice reuses the running instance");
@@ -953,6 +1411,22 @@ namespace Snapline
                         "Released EXE shuts down its GUI message loop cleanly");
                 }
                 finally { if (!process.HasExited) process.Kill(); }
+            }
+            using (var restarted = Process.Start(launch))
+            {
+                try {
+                    restarted.WaitForInputIdle(4000); Pump(700);
+                    Check(!restarted.HasExited && AnnouncementHandle(restarted) == IntPtr.Zero && !AnnouncementWindow.Due(new ImageStore(dataRoot).Settings),
+                        "The released EXE restarts without repeating an already-read version announcement");
+                    uint thread = 0; IntPtr messageWindow = IntPtr.Zero;
+                    while ((messageWindow = FindWindowEx(new IntPtr(-3), messageWindow, null, "Snapline messages")) != IntPtr.Zero) {
+                        uint owner; uint candidate = GetWindowThreadProcessId(messageWindow, out owner);
+                        if (owner == restarted.Id) { thread = candidate; break; }
+                    }
+                    Check(thread != 0 && PostThreadMessage(thread, 0x0012, IntPtr.Zero, IntPtr.Zero) && restarted.WaitForExit(5000) && restarted.ExitCode == 0,
+                        "The announcement-enabled EXE exits cleanly after its subsequent launch");
+                }
+                finally { if (!restarted.HasExited) restarted.Kill(); }
             }
         }
 

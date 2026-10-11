@@ -22,6 +22,7 @@
           <Grid>
             <StackPanel Margin="0,18,0,0">
               <RadioButton x:Name="NavGeneral" GroupName="Pages" Content="常规" IsChecked="True" />
+              <RadioButton x:Name="NavCapture" GroupName="Pages" Content="截图" />
               <RadioButton x:Name="NavKeys" GroupName="Pages" Content="快捷键" />
               <RadioButton x:Name="NavStorage" GroupName="Pages" Content="存储" />
               <RadioButton x:Name="NavAbout" GroupName="Pages" Content="关于" />
@@ -69,6 +70,21 @@
               <CheckBox x:Name="UpdateToggle" Style="{StaticResource Toggle}" HorizontalAlignment="Right" IsChecked="True" AutomationProperties.Name="自动检查更新" />
             </Grid>
           </StackPanel>
+          <StackPanel x:Name="CapturePage" Visibility="Collapsed">
+            <TextBlock Text="截图" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="从截图栏或托盘选择“区域截图”，拖动框选。" Style="{StaticResource Quiet}" Margin="0,8,0,24" />
+            <Grid Style="{StaticResource SettingRow}">
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="截图包含鼠标指针" />
+                <TextBlock Text="仅用于 Snapline 的区域截图，默认关闭。" Style="{StaticResource Quiet}" Margin="0,5,0,0" />
+              </StackPanel>
+              <CheckBox x:Name="CursorToggle" Style="{StaticResource Toggle}" HorizontalAlignment="Right" AutomationProperties.Name="截图包含鼠标指针" />
+            </Grid>
+            <Border Style="{StaticResource Rule}" />
+            <TextBlock Text="开启后" FontWeight="SemiBold" Margin="0,22,0,0" />
+            <TextBlock Text="框选区域后，把鼠标放到要展示的位置，再按 Enter。&#10;按 Esc 取消；拖动可以重新选择区域。" Style="{StaticResource Quiet}" Margin="0,9,0,0" LineHeight="24" />
+            <TextBlock Text="截图保存到收件夹并复制，暂停自动收集时也可手动截图。&#10;Win + Shift + S 仍由 Windows 截图工具控制。" Style="{StaticResource Quiet}" Margin="0,24,0,0" LineHeight="24" />
+          </StackPanel>
           <StackPanel x:Name="KeysPage" Visibility="Collapsed">
             <TextBlock Text="快捷键" FontSize="24" FontWeight="SemiBold" />
             <TextBlock Text="把截图晾衣绳叫出来，也可以随时收起。" Style="{StaticResource Quiet}" Margin="0,8,0,17" />
@@ -78,8 +94,8 @@
             <TextBlock x:Name="KeyHint" Text="支持单键和 Ctrl / Alt / Shift / Win 组合。" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" TextWrapping="Wrap" LineHeight="20" MinHeight="35" />
             <Button x:Name="RestoreKeys" Content="恢复默认" HorizontalAlignment="Left" Margin="0,8,0,12" />
             <Border Style="{StaticResource Rule}" />
-            <TextBlock Text="截图方式" FontWeight="SemiBold" Margin="0,19,0,0" />
-            <TextBlock Text="Win + Shift + S 是 Windows 的系统截图快捷键。&#10;Snapline 收集复制后的图片，不会接管截图操作。" Style="{StaticResource Quiet}" Margin="0,8,0,0" LineHeight="22" />
+            <TextBlock Text="悬停图片快捷操作" FontWeight="SemiBold" Margin="0,19,0,0" />
+            <TextBlock Text="C 复制 · A 用画图编辑 · D / Delete 取下&#10;仅鼠标指向截图时生效，按住不会连续取下。" Style="{StaticResource Quiet}" Margin="0,8,0,0" LineHeight="22" />
           </StackPanel>
           <StackPanel x:Name="StoragePage" Visibility="Collapsed">
             <TextBlock Text="存储" FontSize="24" FontWeight="SemiBold" />
@@ -115,6 +131,7 @@
             <TextBlock Text="原项目：Tendedero&#10;原作者：Alejandro Buján&#10;Windows 移植与发布：jiuyang5354" Foreground="{DynamicResource Muted}" Margin="0,10,0,0" LineHeight="26" />
             <TextBlock Text="非官方 Windows 移植。保留 MIT 许可与原作者声明，&#10;使用独立的 Snapline 名称和图标。" Style="{StaticResource Quiet}" Margin="0,15,0,0" LineHeight="22" />
             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+              <Button x:Name="ViewAnnouncement" Content="更新公告" Margin="0,0,8,0" />
               <Button x:Name="ReleasePage" Content="版本发布页" Margin="0,0,8,0" />
               <Button x:Name="Usage" Content="使用说明" />
             </StackPanel>

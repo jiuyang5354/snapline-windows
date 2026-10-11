@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -19,6 +20,8 @@ namespace Snapline
         internal readonly ImageStore Store;
         internal readonly LineWindow Line;
         internal readonly MessageSink Sink;
+        internal readonly HoverKeys Hover;
+        private readonly Action<string, string> launch;
         internal bool Busy;
         private readonly Forms.NotifyIcon tray;
         private readonly CaptureWatch watch;
@@ -48,10 +51,12 @@ namespace Snapline
         private bool checkingUpdate;
         private UpdateDialog updateDialog;
         private SettingsWindow settingsWindow;
-        private bool DialogOpen { get { return settingsWindow != null || updateDialog != null; } }
+        private AnnouncementWindow announcementWindow;
+        private bool DialogOpen { get { return settingsWindow != null || updateDialog != null || announcementWindow != null; } }
 
-        internal Controller(string root, bool watchFiles, Updates updateClient = null)
+        internal Controller(string root, bool watchFiles, Updates updateClient = null, Action<string, string> launch = null)
         {
+            this.launch = launch;
             dispatcher = Dispatcher.CurrentDispatcher;
             updates = updateClient ?? new Updates();
             Store = new ImageStore(root);
@@ -63,6 +68,7 @@ namespace Snapline
             toggleMenu = Add(menu, "显示 / 隐藏    " + (Sink.HotkeyRegistered ? Sink.HotkeyText : "点击托盘图标"), Toggle);
             Add(menu, "设置…", delegate { ShowSettings("General"); });
             Add(menu, "设置快捷键…", ShowHotkeySettings);
+            Add(menu, "区域截图…", CaptureRegion);
             latestMenu = Add(menu, "复制最近一张", delegate { CopyLatest(); });
             latestMenu.Enabled = Store.Items.Count > 0;
             Add(menu, "挂入图片…", Import);
@@ -82,6 +88,7 @@ namespace Snapline
             autoUpdateMenu = new Forms.ToolStripMenuItem("自动检查更新（含预发布）") { Checked = Store.Settings.AutoCheckUpdates, CheckOnClick = true };
             autoUpdateMenu.Click += delegate { SetAutoUpdates(autoUpdateMenu.Checked); };
             menu.Items.Add(autoUpdateMenu);
+            Add(menu, "更新公告…", delegate { ShowAnnouncement(); });
             Add(menu, "打开版本发布页", delegate { Shell(Updates.Repository + "/releases", null); });
             startupMenu = new Forms.ToolStripMenuItem("开机启动") { CheckOnClick = true };
             startupMenu.Click += delegate {
@@ -115,6 +122,8 @@ namespace Snapline
             mouse = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
             mouse.Tick += Tick;
             mouse.Start();
+            Hover = new HoverKeys(HoverAction);
+            if (!Hover.Registered) Notify("无法启用悬停快捷操作；可继续用鼠标复制、编辑和取下截图。");
             updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
             updateTimer.Tick += delegate {
                 updateTimer.Interval = TimeSpan.FromHours(1);
@@ -330,16 +339,19 @@ namespace Snapline
             return error == null;
         }
 
-        internal bool ApplyPreferences(bool clipboard, bool paused, bool automatic, string folder, uint key, uint modifiers, out string error)
+        internal bool ApplyPreferences(bool clipboard, bool paused, bool automatic, bool includeCursor, string folder, uint key, uint modifiers, out string error)
         {
             var settings = Store.Settings;
             bool oldClipboard = settings.ListenClipboard, oldPaused = settings.CollectionPaused, oldAutomatic = settings.AutoCheckUpdates;
+            bool oldCursor = settings.IncludeCursor;
             string oldFolder = settings.WatchFolder;
             settings.ListenClipboard = clipboard; settings.CollectionPaused = paused;
             settings.AutoCheckUpdates = automatic; settings.WatchFolder = folder;
+            settings.IncludeCursor = includeCursor;
             if (!ChangeHotkey(key, modifiers, out error)) {
                 settings.ListenClipboard = oldClipboard; settings.CollectionPaused = oldPaused;
                 settings.AutoCheckUpdates = oldAutomatic; settings.WatchFolder = oldFolder;
+                settings.IncludeCursor = oldCursor;
                 return false;
             }
             clipboardMenu.Checked = clipboard; pauseMenu.Checked = paused; autoUpdateMenu.Checked = automatic;
@@ -433,16 +445,50 @@ namespace Snapline
         }
 
         internal void RequestUpdate() { if (availableUpdate != null) ShowUpdate(availableUpdate); else CheckUpdates(true); }
+        internal void ShowAnnouncement(bool automatic = false)
+        {
+            if (disposed || announcementWindow != null || (automatic && (!AnnouncementWindow.Due(Store.Settings) || Busy || DialogOpen))) return;
+            Busy = true; Line.Tuck();
+            try
+            {
+                announcementWindow = new AnnouncementWindow();
+                if (settingsWindow != null) { announcementWindow.Owner = settingsWindow; announcementWindow.WindowStartupLocation = WindowStartupLocation.CenterOwner; }
+                announcementWindow.ShowDialog();
+                if (!disposed && AnnouncementWindow.Due(Store.Settings))
+                {
+                    string previous = Store.Settings.AnnouncementSeenVersion;
+                    Store.Settings.AnnouncementSeenVersion = AnnouncementWindow.Version;
+                    try { Store.Save(); }
+                    catch (Exception ex) {
+                        Store.Settings.AnnouncementSeenVersion = previous;
+                        if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw;
+                        Notify("无法保存公告阅读记录，下次启动会再次显示：" + ex.Message);
+                    }
+                }
+            }
+            finally { announcementWindow = null; Busy = DialogOpen; }
+        }
         internal void OpenInbox() { Shell(Store.Inbox, null); }
         internal void OpenReleases() { Shell(Updates.Repository + "/releases", null); }
 
         internal void Open(Shot shot) { Line.Tuck(); Shell(shot.Path, null); }
-        internal void Edit(Shot shot) { Line.Tuck(); Shell("mspaint.exe", "\"" + shot.Path + "\""); }
+        internal static string PaintPath()
+        {
+            string classic = Path.Combine(Environment.SystemDirectory, "mspaint.exe");
+            if (File.Exists(classic)) return classic;
+            string alias = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\WindowsApps\mspaint.exe");
+            return File.Exists(alias) ? alias : "mspaint.exe";
+        }
+
+        internal void Edit(Shot shot) { Line.Tuck(); Shell(PaintPath(), "\"" + shot.Path + "\""); }
         internal void Reveal(Shot shot) { Shell("explorer.exe", "/select,\"" + shot.Path + "\""); }
 
         private void Shell(string path, string arguments)
         {
-            try { Process.Start(new ProcessStartInfo { FileName = path, Arguments = arguments ?? "", UseShellExecute = true }); }
+            try {
+                if (launch != null) launch(path, arguments ?? "");
+                else Process.Start(new ProcessStartInfo { FileName = path, Arguments = arguments ?? "", UseShellExecute = true });
+            }
             catch (Exception ex) { if (!(ex is System.ComponentModel.Win32Exception) && !(ex is InvalidOperationException)) throw; Notify("无法打开：" + ex.Message); }
         }
 
@@ -460,6 +506,44 @@ namespace Snapline
             }
             catch (Exception ex) { if (!ImageStore.IsImageError(ex)) throw; Notify("保存失败：" + ex.Message); }
             finally { Busy = DialogOpen; }
+        }
+
+        private Action HoverAction(int key)
+        {
+            if (disposed || Busy || DialogOpen) return null;
+            var point = Native.Cursor();
+            var card = Line.ShotAt(new System.Windows.Point(point.X, point.Y));
+            if (card == null) return null;
+            Shot shot = card.Shot;
+            return delegate {
+                if (disposed || Busy || !Store.Items.Contains(shot)) return;
+                if (key == 0x43) Copy(shot);
+                else if (key == 0x41) Edit(shot);
+                else Discard(shot);
+            };
+        }
+
+        internal async void CaptureRegion()
+        {
+            if (disposed || Busy) return;
+            Busy = true; Line.Tuck();
+            try {
+                await Task.Delay(250);
+                if (disposed) return;
+                var image = RegionCapture.Pick(Store.Settings.IncludeCursor);
+                if (image != null) AcceptCapture(image);
+            }
+            catch (Exception ex) {
+                if (!ImageStore.IsImageError(ex) && !(ex is System.ComponentModel.Win32Exception)) throw;
+                Notify("截图失败：" + ex.Message);
+            }
+            finally { Busy = DialogOpen; }
+        }
+
+        internal void AcceptCapture(BitmapSource image)
+        {
+            var shot = Store.AddBitmap(image) ?? Store.Items.Find(item => item.Hash == ImageStore.Digest(image));
+            if (shot != null) { Copy(shot); Captured(shot); }
         }
 
         internal void Discard(Shot shot)
@@ -548,13 +632,14 @@ namespace Snapline
         internal void Help()
         {
             Busy = true;
-            try { MessageBox.Show("Win + Shift + S 或 PrintScreen 截图后，图片自动挂入。\n收集剪贴板图片也会收集从其他应用复制的图片，可在托盘菜单关闭。\n\n鼠标在屏幕顶端停留，或 " + Sink.HotkeyText + "：展开 / 收起。\n右键托盘 → 设置快捷键：录入单键或组合键，保存后立即生效。\n单击：复制图片。双击：用默认图片应用打开。\n长按 0.45 秒：用画图编辑，保存后刷新缩略图。\n拖入应用：发送图片或文件副本。\n拖入文件夹：由目标应用决定复制或移动；Shift 拖动可请求移动。\n右键：另存为、在文件夹中显示或取下。\n\n托盘 → 复制最近一张：直接复制，无须展开。\n暂停所有自动收集：同时暂停剪贴板和文件夹，重启后保持。\n开机启动：可选，默认关闭；移动程序后请重新勾选。\n自动检查更新：默认开启，每 24 小时检查并提醒；可关闭。\n下载新版后退出旧版，解压运行；图片和设置保留。\n\n叉号：收件夹里的图片进入回收站；外部原文件保留。\n最多保留 12 张，屏幕较窄时显示最近几张；旧文件仍在收件夹。\n\nSnapline " + Updates.CurrentVersion + " · Windows 非官方移植版\n基于 Alejandro Buján 的 Tendedero 交互与 MIT 代码。", "Snapline · 使用说明", MessageBoxButton.OK, MessageBoxImage.Information); }
+            try { MessageBox.Show("Win + Shift + S 或 PrintScreen 截图后，图片自动挂入。\n收集剪贴板图片也会收集从其他应用复制的图片，可在托盘菜单关闭。\n\n鼠标在屏幕顶端停留，或 " + Sink.HotkeyText + "：展开 / 收起。\n右键托盘 → 设置快捷键：录入单键或组合键，保存后立即生效。\n单击：复制图片。双击：用默认图片应用打开。\n长按 0.45 秒：用画图编辑，保存后刷新缩略图。\n鼠标指向截图时，C 复制、A 编辑、D / Delete 取下。\n拖入应用：发送图片或文件副本。\n拖入文件夹：由目标应用决定复制或移动；Shift 拖动可请求移动。\n右键：另存为、在文件夹中显示或取下。\n\n工具条或托盘 → 区域截图：拖动框选，Esc 取消。\n设置 → 截图 → 截图包含鼠标指针：默认关闭。\n开启后先框选，再摆放指针，按 Enter 截图；不改变 Win + Shift + S。\n\n托盘 → 复制最近一张：直接复制，无须展开。\n暂停所有自动收集：同时暂停剪贴板和文件夹，重启后保持。\n开机启动：可选，默认关闭；移动程序后请重新勾选。\n自动检查更新：默认开启，每 24 小时检查并提醒；可关闭。\n安装版下载 EXE 后点击安装更新，覆盖升级；便携版退出后解压 ZIP。\n\n叉号或 D / Delete：收件夹图片进入回收站；外部原文件保留。\n最多保留 12 张，屏幕较窄时显示最近几张；旧文件仍在收件夹。\n\nSnapline " + Updates.CurrentVersion + " · Windows 非官方移植版\n基于 Alejandro Buján 的 Tendedero 交互与 MIT 代码。", "Snapline · 使用说明", MessageBoxButton.OK, MessageBoxImage.Information); }
             finally { Busy = DialogOpen; }
         }
 
         public void Dispose()
         {
             disposed = true;
+            if (announcementWindow != null) announcementWindow.Close();
             if (settingsWindow != null) settingsWindow.Close();
             mouse.Stop();
             updateTimer.Stop();
@@ -562,6 +647,7 @@ namespace Snapline
             updates.Dispose();
             updateCancel.Dispose();
             if (watch != null) watch.Dispose();
+            Hover.Dispose();
             Sink.Dispose();
             tray.Visible = false;
             tray.Dispose();

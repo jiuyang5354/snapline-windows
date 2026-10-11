@@ -45,9 +45,10 @@ namespace Snapline
             Click("ChooseFolder", ChooseFolder);
             Click("RemoveAll", delegate { controller.Store.Clear(); Feedback("已取下所有卡片，原文件保留", false); });
             Click("CheckUpdates", controller.RequestUpdate);
+            Click("ViewAnnouncement", delegate { controller.ShowAnnouncement(); });
             Click("ReleasePage", controller.OpenReleases);
             Click("Usage", controller.Help);
-            foreach (string name in new[] { "General", "Keys", "Storage", "About" }) {
+            foreach (string name in new[] { "General", "Capture", "Keys", "Storage", "About" }) {
                 string page = name;
                 Part<RadioButton>("Nav" + name).Checked += delegate { ShowPage(page); };
             }
@@ -71,6 +72,7 @@ namespace Snapline
             Part<CheckBox>("CollectToggle").IsChecked = settings.ListenClipboard;
             Part<CheckBox>("PauseToggle").IsChecked = settings.CollectionPaused;
             Part<CheckBox>("UpdateToggle").IsChecked = settings.AutoCheckUpdates;
+            Part<CheckBox>("CursorToggle").IsChecked = settings.IncludeCursor;
             startup = controller.StartupEnabled;
             Part<CheckBox>("StartupToggle").IsChecked = startup;
             folder = settings.WatchFolder;
@@ -81,7 +83,7 @@ namespace Snapline
             Part<TextBlock>("AboutVersion").Text = "v" + Updates.CurrentVersion + " · Windows 预发布";
             SetCandidate(controller.Sink.HotkeyKey, controller.Sink.HotkeyModifiers);
             Part<TextBlock>("KeyHint").Text = KeyHelp;
-            foreach (string name in new[] { "CollectToggle", "PauseToggle", "StartupToggle", "UpdateToggle" }) {
+            foreach (string name in new[] { "CollectToggle", "PauseToggle", "StartupToggle", "UpdateToggle", "CursorToggle" }) {
                 Part<CheckBox>(name).Checked += delegate { Feedback("有未保存的修改", false); };
                 Part<CheckBox>(name).Unchecked += delegate { Feedback("有未保存的修改", false); };
             }
@@ -95,7 +97,7 @@ namespace Snapline
 
         internal void ShowPage(string page)
         {
-            foreach (string name in new[] { "General", "Keys", "Storage", "About" })
+            foreach (string name in new[] { "General", "Capture", "Keys", "Storage", "About" })
                 Part<StackPanel>(name + "Page").Visibility = name == page ? Visibility.Visible : Visibility.Collapsed;
             Part<RadioButton>("Nav" + page).IsChecked = true;
         }
@@ -130,7 +132,8 @@ namespace Snapline
         {
             string error;
             if (!controller.ApplyPreferences(Part<CheckBox>("CollectToggle").IsChecked == true, Part<CheckBox>("PauseToggle").IsChecked == true,
-                Part<CheckBox>("UpdateToggle").IsChecked == true, folder, key, modifiers, out error)) {
+                Part<CheckBox>("UpdateToggle").IsChecked == true, Part<CheckBox>("CursorToggle").IsChecked == true,
+                folder, key, modifiers, out error)) {
                 Feedback(error, true);
                 Part<TextBlock>("KeyHint").Text = error;
                 Part<TextBlock>("KeyHint").Foreground = Ui.Brush("Accent");
