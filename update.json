@@ -1,23 +1,23 @@
 [
   {
-    "tag_name": "v1.4.2",
+    "tag_name": "v1.4.3",
     "draft": false,
     "prerelease": true,
-    "body": "# Snapline v1.4.2 · 更新公告与截图操作改进\n\nSnapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 移植版。原作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**；Windows 实现由 **jiuyang5354** 发布。使用独立名称与图标，不代表原作者背书。完整声明和 MIT 许可随包保留。\n\n## 本次更新\n\n- 新增软件内“更新公告”：首次运行本版自动显示一次；关闭后保存阅读记录，同一版本重启不重复弹出。托盘与“设置 → 关于”可随时重看，离线可用，不受自动检查更新开关影响。\n- 修复点击“用画图编辑”提示“系统找不到指定的文件”：经典画图位于系统目录时使用该路径，否则选择当前用户的 WindowsApps 应用别名。A 与长按共用同一修正入口。\n- 鼠标指向截图时，按 C 复制、A 用画图编辑、D / Delete 取下。无需激活截图栏；按住不会连续取下相邻图片。\n- 鼠标移出截图、截图栏收起或正在设置及执行其他操作时，按键继续交给原应用；Ctrl / Alt / Shift / Win 组合不触发悬停动作。\n- 修复长按编辑：使用稳定窗口坐标判断拖动，避免图片缩小动画被当作鼠标移动。\n- 新增工具条与托盘“区域截图…”入口。拖动框选，默认松开鼠标即保存 PNG 并复制，Esc 取消。\n- 新增“设置 → 截图 → 截图包含鼠标指针”，默认关闭。开启后先框选，再摆放指针并按 Enter 截图；拖动可重新选择。开关只用于 Snapline 自带区域截图。\n- 主动截图在自动收集暂停或剪贴板收集关闭时仍可用。保留晾衣绳、液态玻璃容器、自定义显示快捷键、EXE 覆盖更新和原有数据。\n\n## 下载与升级\n\n- **Snapline-Windows-Setup-v1.4.2.exe**：中文 EXE 安装包，桌面快捷方式默认勾选，可取消；只安装给当前用户。\n- **Snapline-Windows-v1.4.2.zip**：便携版，完整解压后运行 Snapline.exe。\n- **Snapline-Windows-Source-v1.4.2.zip**：可编译源码，包括 C#、XAML、构建与验证脚本。\n- **Snapline-Windows-Installer-Source-v1.4.2.zip**：安装器源码与验证记录。\n- **SHA256SUMS.txt / SHA256SUMS-Setup.txt**：对应下载包的 SHA-256 校验值。\n\n目标系统为 Windows 10 / 11 + .NET Framework 4.8 或更高。无需 Python、Node.js 或管理员权限；当前二进制未作代码签名。\n\n**本版为 Windows 预发布版。** 安装版运行新 EXE 即在原目录覆盖，正常退出旧程序，保留图片、设置、已有快捷方式及开机启动项。v1.3.2 及更早版本的程序内更新仍只下载 ZIP，需手动运行新版安装器一次；v1.3.3 起安装版选择 EXE。便携版需先退出旧版再解压。\n\n## 使用注意事项\n\n- 玻璃边缘使用截图栏展开前采样的桌面背景，样本只在内存中。收起后重新展开会刷新；背后的视频和窗口内容变化不会逐帧更新边缘折射。系统关闭透明效果或启用高对比度时使用实色外框。\n- 默认收集剪贴板中的所有图片，可在常规设置中关闭。截图默认保存在 `%LOCALAPPDATA%\\Snapline\\Inbox`；程序不上传截图、剪贴板内容或本地路径。\n- 最多恢复最近 12 张记录，旧文件仍保留。叉号及 D / Delete 会将收件夹内的图片送入回收站；外部原文件只从列表取下。“全部取下”保留文件。\n- 自定义显示快捷键中的单键会占用其他应用中的同名按键，字母或数字建议使用组合键；F12 是系统保留键。悬停 C / A / D / Delete 只在鼠标指向截图时生效。拖放接收格式与复制/移动由目标应用决定。\n- 区域框选使用开始截图时的桌面快照，摆放鼠标时背景不动；不改变 Windows 系统截图工具的鼠标设置。\n- v1.4.2 完整程序回归 **194 / 194 通过**，公告专项 **23 / 23 通过**，安装器 **74 / 74 通过**，验证首次启动展示、重启不重复、托盘和关于页重看、Enter / Esc 关闭、阅读记录写入失败，以及离线查看。保留悬停按键、长按编辑、区域截图与指针开关回归，用户原图片和设置保持一致。v1.4.1 的真实画图 **4 / 4** 为此前记录。不同缩放的物理多屏、特殊鼠标主题和真实编辑保存体验仍需人工验收。完整范围见 [QA.md](https://github.com/jiuyang5354/snapline-windows/blob/v1.4.2/windows/QA.md)。\n",
+    "body": "# Snapline v1.4.3 · 自定义区域截图快捷键\n\nSnapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 移植版。原作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**；Windows 实现由 **jiuyang5354** 发布。使用独立名称与图标，不代表原作者背书。完整声明和 MIT 许可随包保留。\n\n## 本次更新\n\n- 新增独立的区域截图快捷键，默认 `Ctrl + Alt + S`，复用原有框选、保存 PNG、复制及鼠标指针选项。\n- 设置 → 快捷键分别录入显示 / 隐藏和区域截图；支持单键及 Ctrl / Alt / Shift / Win 组合，分别恢复默认，保存立即生效，重启后保留。\n- 两组不能相同，F12 和单独修饰键不可绑定；按键被占用或设置写入失败时保留两组原注册与偏好。支持互换两组按键。\n- 旧设置新增截图键默认值，保留原显示键、图片和收集偏好。旧显示键与新截图默认键相同时，提示选择另一截图键，继续保留显示键。\n- 托盘显示当前截图快捷键，更新公告和随包说明同步更新。单键会影响其他应用中的同名按键，建议使用组合键；Win + Shift + S 继续由 Windows 控制。\n- 完整程序回归 **233 / 233 通过**，其中快捷键注册专项 14 项全部通过；安装器 **74 / 74 通过**。实际全局按键、框选、保存与复制、Esc 取消、重启注册和原有截图操作已验证，原截图、设置、快捷方式与启动项保留。\n- 提供 `Snapline-Windows-Setup-v1.4.3.exe` 安装包、`Snapline-Windows-v1.4.3.zip` 便携包及对应源码包。安装版运行 EXE 覆盖原目录，保留截图、设置、快捷方式与启动项；便携版先退出旧版再解压。\n\n\n## 下载与升级\n\n- **Snapline-Windows-Setup-v1.4.3.exe**：中文 EXE 安装包，桌面快捷方式默认勾选，可取消；只安装给当前用户。\n- **Snapline-Windows-v1.4.3.zip**：便携版，完整解压后运行 Snapline.exe。\n- **Snapline-Windows-Source-v1.4.3.zip**：可编译源码，包括 C#、XAML、构建与验证脚本。\n- **Snapline-Windows-Installer-Source-v1.4.3.zip**：安装器源码与验证记录。\n- **SHA256SUMS.txt / SHA256SUMS-Setup.txt**：对应下载包的 SHA-256 校验值。\n\n目标系统为 Windows 10 / 11 + .NET Framework 4.8 或更高。无需 Python、Node.js 或管理员权限；当前二进制未作代码签名。\n\n**本版为 Windows 预发布版。** 安装版运行新 EXE 即在原目录覆盖，正常退出旧程序，保留图片、设置、已有快捷方式及开机启动项。v1.3.2 及更早版本的程序内更新仍只下载 ZIP，需手动运行新版安装器一次；v1.3.3 起安装版选择 EXE。便携版需先退出旧版再解压。\n\n## 使用注意事项\n\n- 玻璃边缘使用截图栏展开前采样的桌面背景，样本只在内存中。收起后重新展开会刷新；背后的视频和窗口内容变化不会逐帧更新边缘折射。系统关闭透明效果或启用高对比度时使用实色外框。\n- 默认收集剪贴板中的所有图片，可在常规设置中关闭。截图默认保存在 `%LOCALAPPDATA%\\Snapline\\Inbox`；程序不上传截图、剪贴板内容或本地路径。\n- 最多恢复最近 12 张记录，旧文件仍保留。叉号及 D / Delete 会将收件夹内的图片送入回收站；外部原文件只从列表取下。“全部取下”保留文件。\n- 自定义快捷键中的单键会占用其他应用中的同名按键，字母或数字建议使用组合键；F12 是系统保留键。悬停 C / A / D / Delete 只在鼠标指向截图时生效。拖放接收格式与复制/移动由目标应用决定。\n- 区域框选使用开始截图时的桌面快照，摆放鼠标时背景不动；不改变 Windows 系统截图工具的鼠标设置。\n- v1.4.3 完整程序回归 **233 / 233 通过**，安装器 **74 / 74 通过**；实际全局按键、框选、保存与复制、Esc 取消、重启注册和原有截图操作均通过，原截图、设置、快捷方式与启动项保留。v1.4.2 公告专项 **23 / 23**、v1.4.1 真实画图 **4 / 4** 为此前记录。不同缩放的物理多屏、特殊鼠标主题和真实编辑保存体验仍需人工验收。完整范围见 [QA.md](https://github.com/jiuyang5354/snapline-windows/blob/v1.4.3/windows/QA.md)。\n",
     "assets": [
       {
-        "name": "Snapline-Windows-v1.4.2.zip",
+        "name": "Snapline-Windows-v1.4.3.zip",
         "state": "uploaded",
-        "size": 158789,
-        "digest": "sha256:7f3fe6afbf90e1e60df490e4feb61cd9501c02c88d4b072ec71199420d0381d0",
-        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.2/Snapline-Windows-v1.4.2.zip"
+        "size": 159582,
+        "digest": "sha256:8b36d993c167b1c95256cceab6e039396cabc533914e78f3552572f87514f16e",
+        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.3/Snapline-Windows-v1.4.3.zip"
       },
       {
-        "name": "Snapline-Windows-Setup-v1.4.2.exe",
+        "name": "Snapline-Windows-Setup-v1.4.3.exe",
         "state": "uploaded",
-        "size": 240620,
-        "digest": "sha256:6a6135328d76d5c2a6d1f192e3139ebdb43372fe6e023dd106674e83fe8e9ea0",
-        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.2/Snapline-Windows-Setup-v1.4.2.exe"
+        "size": 243321,
+        "digest": "sha256:a3863a78832ed74dd4a89dd3bf15408e498f34ded153c0d8107449d76dc1e018",
+        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.3/Snapline-Windows-Setup-v1.4.3.exe"
       }
     ]
   }
