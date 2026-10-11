@@ -1,23 +1,23 @@
 [
   {
-    "tag_name": "v1.4.3",
+    "tag_name": "v1.4.4",
     "draft": false,
     "prerelease": true,
-    "body": "# Snapline v1.4.3 · 自定义区域截图快捷键\n\nSnapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 移植版。原作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**；Windows 实现由 **jiuyang5354** 发布。使用独立名称与图标，不代表原作者背书。完整声明和 MIT 许可随包保留。\n\n## 本次更新\n\n- 新增独立的区域截图快捷键，默认 `Ctrl + Alt + S`，复用原有框选、保存 PNG、复制及鼠标指针选项。\n- 设置 → 快捷键分别录入显示 / 隐藏和区域截图；支持单键及 Ctrl / Alt / Shift / Win 组合，分别恢复默认，保存立即生效，重启后保留。\n- 两组不能相同，F12 和单独修饰键不可绑定；按键被占用或设置写入失败时保留两组原注册与偏好。支持互换两组按键。\n- 旧设置新增截图键默认值，保留原显示键、图片和收集偏好。旧显示键与新截图默认键相同时，提示选择另一截图键，继续保留显示键。\n- 托盘显示当前截图快捷键，更新公告和随包说明同步更新。单键会影响其他应用中的同名按键，建议使用组合键；Win + Shift + S 继续由 Windows 控制。\n- 完整程序回归 **233 / 233 通过**，其中快捷键注册专项 14 项全部通过；安装器 **74 / 74 通过**。实际全局按键、框选、保存与复制、Esc 取消、重启注册和原有截图操作已验证，原截图、设置、快捷方式与启动项保留。\n- 提供 `Snapline-Windows-Setup-v1.4.3.exe` 安装包、`Snapline-Windows-v1.4.3.zip` 便携包及对应源码包。安装版运行 EXE 覆盖原目录，保留截图、设置、快捷方式与启动项；便携版先退出旧版再解压。\n\n\n## 下载与升级\n\n- **Snapline-Windows-Setup-v1.4.3.exe**：中文 EXE 安装包，桌面快捷方式默认勾选，可取消；只安装给当前用户。\n- **Snapline-Windows-v1.4.3.zip**：便携版，完整解压后运行 Snapline.exe。\n- **Snapline-Windows-Source-v1.4.3.zip**：可编译源码，包括 C#、XAML、构建与验证脚本。\n- **Snapline-Windows-Installer-Source-v1.4.3.zip**：安装器源码与验证记录。\n- **SHA256SUMS.txt / SHA256SUMS-Setup.txt**：对应下载包的 SHA-256 校验值。\n\n目标系统为 Windows 10 / 11 + .NET Framework 4.8 或更高。无需 Python、Node.js 或管理员权限；当前二进制未作代码签名。\n\n**本版为 Windows 预发布版。** 安装版运行新 EXE 即在原目录覆盖，正常退出旧程序，保留图片、设置、已有快捷方式及开机启动项。v1.3.2 及更早版本的程序内更新仍只下载 ZIP，需手动运行新版安装器一次；v1.3.3 起安装版选择 EXE。便携版需先退出旧版再解压。\n\n## 使用注意事项\n\n- 玻璃边缘使用截图栏展开前采样的桌面背景，样本只在内存中。收起后重新展开会刷新；背后的视频和窗口内容变化不会逐帧更新边缘折射。系统关闭透明效果或启用高对比度时使用实色外框。\n- 默认收集剪贴板中的所有图片，可在常规设置中关闭。截图默认保存在 `%LOCALAPPDATA%\\Snapline\\Inbox`；程序不上传截图、剪贴板内容或本地路径。\n- 最多恢复最近 12 张记录，旧文件仍保留。叉号及 D / Delete 会将收件夹内的图片送入回收站；外部原文件只从列表取下。“全部取下”保留文件。\n- 自定义快捷键中的单键会占用其他应用中的同名按键，字母或数字建议使用组合键；F12 是系统保留键。悬停 C / A / D / Delete 只在鼠标指向截图时生效。拖放接收格式与复制/移动由目标应用决定。\n- 区域框选使用开始截图时的桌面快照，摆放鼠标时背景不动；不改变 Windows 系统截图工具的鼠标设置。\n- v1.4.3 完整程序回归 **233 / 233 通过**，安装器 **74 / 74 通过**；实际全局按键、框选、保存与复制、Esc 取消、重启注册和原有截图操作均通过，原截图、设置、快捷方式与启动项保留。v1.4.2 公告专项 **23 / 23**、v1.4.1 真实画图 **4 / 4** 为此前记录。不同缩放的物理多屏、特殊鼠标主题和真实编辑保存体验仍需人工验收。完整范围见 [QA.md](https://github.com/jiuyang5354/snapline-windows/blob/v1.4.3/windows/QA.md)。\n",
+    "body": "Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 移植版。原作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**；Windows 实现由 **jiuyang5354** 发布。使用独立名称与图标，不代表原作者背书。原作者声明及 MIT 许可随包保留。\n\n- 常规、截图、快捷键、存储、关于五页设置改为整窗液态毛玻璃：更通透的背景、柔和雾化、圆角边缘折射与高光。\n- 导航、按钮和开关采用液态金属质感，保留独立边缘亮线与外侧泛光；悬停和点击有流动反馈，空闲后停止动画。\n- 鼠标操作时隐藏多余的半透明焦点圈，键盘 Tab 导航仍显示清晰焦点提示，避免重复边框遮住材质。\n- 软件内更新公告同步包含本次界面变化、使用提醒和原作者说明。首次运行 v1.4.4 显示一次，托盘和“设置 → 关于”可随时重看，离线可用。\n- 材质参考提供的 liquid-glass 和 liquid-metal skill，以原生 C# / WPF 实现，无需浏览器运行组件。设置背景在打开前采样并仅保存在内存，移动时重新取样；背景中的视频或窗口变化不会实时刷新。关闭系统透明效果或启用高对比度时回退实色，关闭系统界面动画时使用静态材质。\n- 原有自定义显示 / 隐藏键与区域截图键（默认 `Ctrl + Alt + S`）、悬停 C / A / D / Delete、长按画图编辑、指针包含选项及收集开关一起回归。\n- 完整程序回归 **233 / 233 通过**，原生材质专项 **18 / 18 通过**；安装器 **74 / 74 通过**。测试前后原有 5 张截图、设置、桌面和开始菜单快捷方式、开机启动值保持一致。真实联网与公开下载另在发布后核对。\n- 提供 `Snapline-Windows-Setup-v1.4.4.exe` 安装包、`Snapline-Windows-v1.4.4.zip` 便携包及对应源码包。安装版运行 EXE 覆盖原目录，保留截图、设置、快捷方式与启动项；便携版先退出旧版再解压。\n\n程序仍为 Windows 预发布版，目前未做代码签名。具体验证范围见随包 `QA.md`，Windows 10 / 11 需要 .NET Framework 4.8 或更高版本。\n",
     "assets": [
       {
-        "name": "Snapline-Windows-v1.4.3.zip",
+        "name": "Snapline-Windows-v1.4.4.zip",
         "state": "uploaded",
-        "size": 159582,
-        "digest": "sha256:8b36d993c167b1c95256cceab6e039396cabc533914e78f3552572f87514f16e",
-        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.3/Snapline-Windows-v1.4.3.zip"
+        "size": 169781,
+        "digest": "sha256:48dac3faaff90818a84267c4d4755ed9a6833d8feaa93088f6f3a37469deb0ea",
+        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.4/Snapline-Windows-v1.4.4.zip"
       },
       {
-        "name": "Snapline-Windows-Setup-v1.4.3.exe",
+        "name": "Snapline-Windows-Setup-v1.4.4.exe",
         "state": "uploaded",
-        "size": 243321,
-        "digest": "sha256:a3863a78832ed74dd4a89dd3bf15408e498f34ded153c0d8107449d76dc1e018",
-        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.3/Snapline-Windows-Setup-v1.4.3.exe"
+        "size": 251253,
+        "digest": "sha256:2977b82b899f7d14ef782972e029e83dd2538bd0b9df896311dc98461104ca09",
+        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.4/Snapline-Windows-Setup-v1.4.4.exe"
       }
     ]
   }
