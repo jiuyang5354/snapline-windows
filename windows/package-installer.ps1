@@ -1,5 +1,5 @@
 param(
-    [string]$PortableZip = (Join-Path $PSScriptRoot 'Snapline-Windows-v1.3.2.zip'),
+    [string]$PortableZip = (Join-Path $PSScriptRoot 'Snapline-Windows-v1.3.3.zip'),
     [string]$ChecksumFile = (Join-Path (Split-Path $PSScriptRoot -Parent) 'SHA256SUMS.txt'),
     [string]$NsisPath = (Join-Path $PSScriptRoot '.tools\nsis-3.13\makensis.exe'),
     [switch]$Test
@@ -59,3 +59,15 @@ $sourceHash = (Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLo
 [System.IO.File]::WriteAllText((Join-Path $stageRoot 'SHA256SUMS-Setup.txt'),
     $setupHash + '  ' + [System.IO.Path]::GetFileName($outputFile) + "`n" + $sourceHash + '  ' + [System.IO.Path]::GetFileName($sourceZip) + "`n", $utf8)
 Get-Item -LiteralPath $outputFile, $sourceZip | Select-Object FullName, Length
+$feedPath = Join-Path $PSScriptRoot 'dist\update.json'
+if (Test-Path -LiteralPath $feedPath) {
+    $feed = @(Get-Content -LiteralPath $feedPath -Raw | ConvertFrom-Json)
+    if ($feed.Count -ne 1 -or $feed[0].tag_name -ne ('v' + $appVersion)) { throw 'Installer does not match the generated update feed version.' }
+    $installerName = [System.IO.Path]::GetFileName($outputFile)
+    $feed[0].assets = @($feed[0].assets | Where-Object { $_.name -ne $installerName }) + @([ordered]@{
+        name=$installerName; state='uploaded'; size=(Get-Item -LiteralPath $outputFile).Length; digest=('sha256:' + $setupHash)
+        browser_download_url=('https://github.com/jiuyang5354/snapline-windows/releases/download/v' + $appVersion + '/' + $installerName)
+    })
+    [System.IO.File]::WriteAllText($feedPath, (ConvertTo-Json -InputObject $feed -Depth 5).Replace("`r`n", "`n") + "`n", $utf8)
+    Write-Output 'Update feed includes verified ZIP and EXE assets; publish only after both are uploaded and checked.'
+}

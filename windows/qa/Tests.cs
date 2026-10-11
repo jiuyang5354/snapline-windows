@@ -231,6 +231,7 @@ namespace Snapline
                 CheckSettings(controller, output);
                 CheckConvenience(controller, root);
                 CheckUpdates(root, output);
+                CheckInstallerUpdates(root, output);
                 controller.Dispose(); controller = null;
                 using (var restarted = new Controller(Path.Combine(root, "live"), false))
                 {
@@ -331,15 +332,17 @@ namespace Snapline
             }
         }
 
-        private static string ReleaseJson(string tag, byte[] package, bool draft, bool prerelease)
+        private static string ReleaseJson(string tag, byte[] package, bool draft, bool prerelease, bool includeInstaller = false)
         {
             string digest;
             using (var hash = SHA256.Create()) digest = BitConverter.ToString(hash.ComputeHash(package)).Replace("-", "").ToLowerInvariant();
-            return "{\"tag_name\":\"" + tag + "\",\"draft\":" + draft.ToString().ToLowerInvariant() +
-                ",\"prerelease\":" + prerelease.ToString().ToLowerInvariant() + ",\"body\":\"Update fixture\",\"assets\":[{" +
+            string asset = "{" +
                 "\"name\":\"Snapline-Windows-" + tag + ".zip\",\"state\":\"uploaded\",\"size\":" + package.Length +
                 ",\"digest\":\"sha256:" + digest + "\",\"browser_download_url\":\"" + Updates.Repository +
-                "/releases/download/" + tag + "/Snapline-Windows-" + tag + ".zip\"}]}";
+                "/releases/download/" + tag + "/Snapline-Windows-" + tag + ".zip\"}";
+            return "{\"tag_name\":\"" + tag + "\",\"draft\":" + draft.ToString().ToLowerInvariant() +
+                ",\"prerelease\":" + prerelease.ToString().ToLowerInvariant() + ",\"body\":\"Update fixture\",\"assets\":[" + asset +
+                (includeInstaller ? "," + asset.Replace("Snapline-Windows-", "Snapline-Windows-Setup-").Replace(".zip", ".exe") : "") + "]}";
         }
 
         private static void CheckUpdates(string root, string output)
@@ -439,7 +442,7 @@ namespace Snapline
                 Pump(350);
                 Check(automatic.Calls == 1, "The live scheduler stays offline after automatic checks are disabled");
             }
-            using (var dialog = new UpdateDialog(release, delegate { return Task.FromResult(0); }, delegate { }))
+            using (var dialog = new UpdateDialog(release, delegate { return Task.FromResult(0); }, delegate { }, delegate { }))
             using (var timer = new Forms.Timer { Interval = 150 })
             {
                 timer.Tick += delegate {
@@ -456,16 +459,117 @@ namespace Snapline
             }
         }
 
+        private static void CheckInstallerUpdates(string root, string output)
+        {
+            string registered = Path.Combine(root, "安装 目录");
+            Check(Updates.InstalledAt(Path.Combine(registered, "Snapline.exe"), registered.ToUpperInvariant()),
+                "Installed update mode matches the registered executable path including Unicode and case differences");
+            Check(!Updates.InstalledAt(Path.Combine(registered + "-portable", "Snapline.exe"), registered),
+                "A separate portable copy stays in ZIP update mode even when another copy is installed");
+            Check(!Updates.InstalledAt(Path.Combine(registered, "Snapline.exe"), null) &&
+                !Updates.InstalledAt(Path.Combine(registered, "Snapline.exe"), "relative-directory"), "Missing or relative installation registration does not enable EXE update mode");
+            var package = Encoding.UTF8.GetBytes("MZ generated installer fixture; never executed");
+            string both = "[" + ReleaseJson("v1.4.0", package, false, true, true) + "]";
+            var json = Encoding.UTF8.GetBytes(both);
+            var release = Updates.Parse(json, Updates.CurrentVersion, true);
+            Check(release != null && release.IsInstaller && release.Package.Name == "Snapline-Windows-Setup-v1.4.0.exe",
+                "Installed clients select the EXE installer from a feed containing both update formats");
+            Check(Updates.Parse(json, new Version(1, 3, 2)).Package.Name == "Snapline-Windows-v1.4.0.zip",
+                "Portable and legacy ZIP clients retain a compatible package in the same update feed");
+            Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + ReleaseJson("v1.4.0", package, false, true) + "]"), Updates.CurrentVersion, true) == null,
+                "Installed clients never silently substitute a ZIP when the verified installer is missing");
+            Check(Updates.Parse(Encoding.UTF8.GetBytes(both.Replace("/Snapline-Windows-Setup-v1.4.0.exe", "/other.exe")), Updates.CurrentVersion, true) == null,
+                "Installer download URLs must match the exact release asset in the publishing repository");
+            Check(Updates.Parse(Encoding.UTF8.GetBytes(both.Replace("sha256:", "sha1:")), Updates.CurrentVersion, true) == null,
+                "Installer assets without a complete SHA-256 digest are rejected");
+            var handler = new UpdateHandler { Json = json, Package = package };
+            using (var updater = new Updates(handler, true))
+            {
+                var found = updater.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
+                Check(found.IsInstaller && handler.Headers, "Actual installed-mode HTTP checks select an EXE without sending an account token");
+                string destination = Path.Combine(root, "新版 安装包.exe");
+                int started = 0; string opened = null;
+                using (var dialog = new UpdateDialog(found,
+                    delegate(string path, IProgress<int> progress, CancellationToken cancel) { return updater.DownloadAsync(found, path, progress, cancel); },
+                    delegate(string path) { opened = path; }, delegate(string path) { if (path == destination) started++; }))
+                {
+                    using (var picker = dialog.SaveDialog())
+                        Check(picker.DefaultExt == "exe" && picker.Filter == "EXE 安装包|*.exe" && picker.FileName == found.Package.Name,
+                            "Installed update Save As uses the EXE filename and extension instead of ZIP");
+                    dialog.Show(); Pump(50);
+                    var pending = dialog.DownloadTo(destination); WaitUI(pending);
+                    var button = dialog.Controls.OfType<Forms.Button>().Single(item => item.Text == "安装更新");
+                    Check(File.ReadAllBytes(destination).SequenceEqual(package) && button.Enabled && opened == destination && started == 0,
+                        "Verified installer download enables Install Update and waits for an explicit click");
+                    using (var image = new System.Drawing.Bitmap(dialog.Width, dialog.Height))
+                    {
+                        dialog.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, image.Width, image.Height));
+                        image.Save(Path.Combine(output, "installer-update-dialog.png"), System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                    button.PerformClick();
+                    Check(started == 1 && !button.Enabled, "Install Update launches the verified file exactly once through the real button event");
+                    dialog.Close();
+                }
+                started = 0;
+                using (var dialog = new UpdateDialog(found,
+                    delegate(string path, IProgress<int> progress, CancellationToken cancel) { return updater.DownloadAsync(found, path, progress, cancel); },
+                    delegate { }, delegate { started++; }))
+                {
+                    dialog.Show(); Pump(50); WaitUI(dialog.DownloadTo(destination));
+                    File.WriteAllBytes(destination, Enumerable.Repeat((byte)42, package.Length).ToArray());
+                    dialog.Controls.OfType<Forms.Button>().Single(item => item.Text == "安装更新").PerformClick();
+                    Check(started == 0 && dialog.Controls.OfType<Forms.Button>().Any(item => item.Text == "重新下载…" && item.Enabled),
+                        "A changed installer file is rechecked and cannot run after download verification");
+                    WaitUI(dialog.DownloadTo(destination));
+                    Check(File.ReadAllBytes(destination).SequenceEqual(package) && started == 0,
+                        "A rejected installer can be downloaded and verified again without launching automatically");
+                    dialog.Close();
+                }
+                handler.Package = Enumerable.Repeat((byte)42, package.Length).ToArray(); started = 0;
+                using (var dialog = new UpdateDialog(found,
+                    delegate(string path, IProgress<int> progress, CancellationToken cancel) { return updater.DownloadAsync(found, path, progress, cancel); },
+                    delegate { }, delegate { started++; }))
+                {
+                    dialog.Show(); Pump(50); WaitUI(dialog.DownloadTo(destination));
+                    Check(started == 0 && !dialog.Controls.OfType<Forms.Button>().Any(item => item.Text == "安装更新") && File.ReadAllBytes(destination).SequenceEqual(package),
+                        "A failed EXE checksum never enables installation or replaces a previous verified download");
+                    dialog.Close();
+                }
+                started = 0;
+                using (var dialog = new UpdateDialog(found,
+                    delegate(string path, IProgress<int> progress, CancellationToken cancel) { return Task.Delay(3000, cancel); },
+                    delegate { }, delegate { started++; }))
+                {
+                    dialog.Show(); Pump(50); var pending = dialog.DownloadTo(destination); dialog.Close(); WaitUI(pending);
+                    Check(started == 0 && !dialog.IsDisposed && dialog.Controls.OfType<Forms.Label>().Any(item => item.Text.Contains("已取消")),
+                        "Closing during an installer download cancels it and never launches the installer");
+                    dialog.Close();
+                }
+            }
+            using (var portable = new UpdateDialog(Updates.Parse(json, Updates.CurrentVersion), delegate { return Task.FromResult(0); }, delegate { }, delegate { }))
+            using (var picker = portable.SaveDialog())
+                Check(picker.DefaultExt == "zip" && picker.Filter == "ZIP 更新包|*.zip", "Portable updates retain their original ZIP Save As format");
+        }
+
+        private static void WaitUI(Task task)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!task.IsCompleted && DateTime.UtcNow < deadline) Pump(20);
+            if (!task.IsCompleted) throw new TimeoutException("Update dialog did not complete the test transfer.");
+            task.GetAwaiter().GetResult();
+        }
+
         private static int CheckNetwork(string output)
         {
             Directory.CreateDirectory(output);
             try
             {
-                Release release;
+                Release release; byte[] feed;
                 using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20), MaxResponseContentBufferSize = 1024 * 1024 })
                 {
                     http.DefaultRequestHeaders.UserAgent.ParseAdd("Snapline-QA/" + Updates.CurrentVersion);
-                    release = Updates.Parse(http.GetByteArrayAsync(Updates.Feed).GetAwaiter().GetResult(), new Version(0, 0, 0));
+                    feed = http.GetByteArrayAsync(Updates.Feed).GetAwaiter().GetResult();
+                    release = Updates.Parse(feed, new Version(0, 0, 0));
                 }
                 Check(release != null, "Anonymous HTTPS retrieves a valid published update feed");
                 using (var updater = new Updates())
@@ -478,6 +582,18 @@ namespace Snapline
                     Check(File.Exists(path) && new FileInfo(path).Length == release.Package.Size,
                         "The actual app downloads and SHA-256-verifies the public GitHub release package without an account");
                     Check(Directory.GetFiles(output, "*.download").Length == 0, "A real completed download leaves no incomplete files");
+                }
+                var installerRelease = Updates.Parse(feed, new Version(0, 0, 0), true);
+                Check(installerRelease != null && installerRelease.IsInstaller, "Anonymous public update feed also contains a verified EXE installer");
+                using (var updater = new Updates(new HttpClientHandler(), true))
+                {
+                    var available = updater.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
+                    Check(installerRelease.Version > Updates.CurrentVersion ? available != null && available.IsInstaller && available.Tag == installerRelease.Tag : available == null,
+                        "Installed-mode native HTTP client compares the release version and selects EXE updates");
+                    string path = Path.Combine(output, installerRelease.Package.Name);
+                    updater.DownloadAsync(installerRelease, path, null, CancellationToken.None).GetAwaiter().GetResult();
+                    Check(File.Exists(path) && new FileInfo(path).Length == installerRelease.Package.Size && Directory.GetFiles(output, "*.download").Length == 0,
+                        "Installed-mode native updater downloads and SHA-256-verifies the public EXE without running it");
                 }
                 File.WriteAllLines(Path.Combine(output, "network-results.txt"), checks);
                 Console.WriteLine("PASS " + checks.Count + " real network checks.");

@@ -426,7 +426,8 @@ namespace Snapline
                     delegate(string target) {
                         if (target == release.Page) Shell(target, null);
                         else Shell("explorer.exe", "/select,\"" + target + "\"");
-                    })) updateDialog.ShowDialog();
+                    },
+                    delegate(string path) { Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true }); })) updateDialog.ShowDialog();
             }
             finally { updateDialog = null; Busy = DialogOpen; }
         }

@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 
 namespace Snapline
 {
@@ -21,6 +22,7 @@ namespace Snapline
         [DataMember(Name = "assets")] public ReleaseAsset[] Assets { get; set; }
         internal Version Version;
         internal ReleaseAsset Package;
+        internal bool IsInstaller { get { return Package.Name == "Snapline-Windows-Setup-" + Tag + ".exe"; } }
         internal string Page { get { return Updates.Repository + "/releases/tag/" + Tag; } }
     }
 
@@ -40,13 +42,16 @@ namespace Snapline
         internal const string Feed = "https://raw.githubusercontent.com/jiuyang5354/snapline-windows/main/update.json";
         private const int MaxPackageBytes = 20 * 1024 * 1024;
         private readonly HttpClient client;
+        private readonly bool installed;
         internal static Version CurrentVersion {
             get { var version = Assembly.GetExecutingAssembly().GetName().Version; return new Version(version.Major, version.Minor, version.Build); }
         }
 
-        internal Updates() : this(new HttpClientHandler()) { }
-        internal Updates(HttpMessageHandler handler)
+        internal Updates() : this(new HttpClientHandler(), InstalledAt(System.Windows.Forms.Application.ExecutablePath,
+            Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\Snapline", "InstallLocation", null) as string)) { }
+        internal Updates(HttpMessageHandler handler, bool installed = false)
         {
+            this.installed = installed;
             client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan, MaxResponseContentBufferSize = MaxPackageBytes };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Snapline/" + CurrentVersion);
             client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
@@ -58,7 +63,16 @@ namespace Snapline
                 settings.UpdateCheckedUtcTicks > now.Ticks || now.Ticks - settings.UpdateCheckedUtcTicks >= TimeSpan.TicksPerDay);
         }
 
-        internal static Release Parse(byte[] json, Version current)
+        internal static bool InstalledAt(string executable, string location)
+        {
+            if (string.IsNullOrWhiteSpace(executable) || string.IsNullOrWhiteSpace(location) ||
+                !Path.IsPathRooted(executable) || !Path.IsPathRooted(location)) return false;
+            try { return string.Equals(Path.GetFullPath(executable), Path.GetFullPath(Path.Combine(location, "Snapline.exe")), StringComparison.OrdinalIgnoreCase); }
+            catch (ArgumentException) { return false; }
+            catch (NotSupportedException) { return false; }
+        }
+
+        internal static Release Parse(byte[] json, Version current, bool installed = false)
         {
             Release best = null;
             Release[] releases;
@@ -70,7 +84,7 @@ namespace Snapline
                 if (release == null || release.Draft || release.Tag == null || !release.Tag.StartsWith("v", StringComparison.Ordinal) ||
                     !Version.TryParse(release.Tag.Substring(1), out version) || version.Build < 0 || version.Revision >= 0 ||
                     release.Tag != "v" + version.ToString(3) || version <= current || release.Assets == null) continue;
-                string name = "Snapline-Windows-" + release.Tag + ".zip";
+                string name = (installed ? "Snapline-Windows-Setup-" : "Snapline-Windows-") + release.Tag + (installed ? ".exe" : ".zip");
                 foreach (var asset in release.Assets)
                     if (asset != null && asset.Name == name && asset.State == "uploaded" && asset.Size > 0 && asset.Size <= MaxPackageBytes &&
                         asset.Url == Repository + "/releases/download/" + release.Tag + "/" + name && asset.Digest != null &&
@@ -94,7 +108,7 @@ namespace Snapline
                     using (var output = new MemoryStream())
                     {
                         await Transfer(input, output, 1024 * 1024, null, timeout.Token).ConfigureAwait(false);
-                        return Parse(output.ToArray(), CurrentVersion);
+                        return Parse(output.ToArray(), CurrentVersion, installed);
                     }
                 }
             }
@@ -118,17 +132,23 @@ namespace Snapline
                             received = await Transfer(input, output, release.Package.Size, progress, timeout.Token).ConfigureAwait(false);
                         if (received != release.Package.Size) throw new IOException("更新包下载不完整，请重试。");
                     }
-                    string digest;
-                    using (var input = File.OpenRead(temporary))
-                    using (var hash = SHA256.Create()) digest = BitConverter.ToString(hash.ComputeHash(input)).Replace("-", "");
-                    if (!string.Equals(digest, release.Package.Digest.Substring(7), StringComparison.OrdinalIgnoreCase))
-                        throw new IOException("更新包校验失败，请重新下载。");
+                    Verify(release, temporary);
                     timeout.Token.ThrowIfCancellationRequested();
                     if (File.Exists(destination)) File.Replace(temporary, destination, null);
                     else File.Move(temporary, destination);
                 }
             }
             finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        }
+
+        internal static void Verify(Release release, string path)
+        {
+            if (new FileInfo(path).Length != release.Package.Size) throw new IOException("更新包大小不符，请重新下载。");
+            string digest;
+            using (var input = File.OpenRead(path))
+            using (var hash = SHA256.Create()) digest = BitConverter.ToString(hash.ComputeHash(input)).Replace("-", "");
+            if (!string.Equals(digest, release.Package.Digest.Substring(7), StringComparison.OrdinalIgnoreCase))
+                throw new IOException("更新包校验失败，请重新下载。");
         }
 
         private static async Task<long> Transfer(Stream input, Stream output, long limit, IProgress<int> progress, CancellationToken cancel)
