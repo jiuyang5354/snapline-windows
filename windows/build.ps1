@@ -1,4 +1,4 @@
-param([switch]$Test, [switch]$Features, [switch]$Editor, [switch]$Announcements)
+param([switch]$Test, [switch]$Features, [switch]$Editor, [switch]$Announcements, [switch]$Bindings)
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $frameworkRoot = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319'
@@ -27,11 +27,12 @@ foreach ($licenseFile in @('LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md')) {
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.zh-CN.md') -Destination (Join-Path $binaryRoot 'README.zh-CN.md')
 Write-Output ('Built: ' + (Join-Path $binaryRoot 'Snapline.exe'))
-if ($Test -or $Features -or $Editor -or $Announcements) {
+if ($Test -or $Features -or $Editor -or $Announcements -or $Bindings) {
     & $compilerPath @common '/target:exe' '/main:Snapline.Tests' ('/out:' + (Join-Path $binaryRoot 'Snapline.Tests.exe')) @sourcePaths (Join-Path $projectRoot 'qa\Tests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Snapline.exe.config') -Destination (Join-Path $binaryRoot 'Snapline.Tests.exe.config')
-    if ($Editor) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --editor (Join-Path $projectRoot 'qa\output\editor-v1.4.1') }
+    if ($Bindings) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --bindings (Join-Path $projectRoot 'qa\output') }
+    elseif ($Editor) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --editor (Join-Path $projectRoot 'qa\output\editor-v1.4.1') }
     elseif ($Announcements) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --announcements (Join-Path $projectRoot 'qa\output') }
     elseif ($Features) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --features (Join-Path $projectRoot 'qa\output') }
     else { & (Join-Path $binaryRoot 'Snapline.Tests.exe') (Join-Path $projectRoot 'qa\output') }

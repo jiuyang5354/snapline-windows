@@ -18,6 +18,8 @@ namespace Snapline
         [DataMember] public List<string> Paths = new List<string>();
         [DataMember] public uint HotkeyKey = Hotkey.DefaultKey;
         [DataMember] public uint HotkeyModifiers = Hotkey.DefaultModifiers;
+        [DataMember] public uint CaptureHotkeyKey = Hotkey.DefaultCaptureKey;
+        [DataMember] public uint CaptureHotkeyModifiers = Hotkey.DefaultModifiers;
         [DataMember] public bool CollectionPaused;
         [DataMember] public bool AutoCheckUpdates = true;
         [DataMember] public bool IncludeCursor;
@@ -30,6 +32,8 @@ namespace Snapline
         {
             HotkeyKey = Hotkey.DefaultKey;
             HotkeyModifiers = Hotkey.DefaultModifiers;
+            CaptureHotkeyKey = Hotkey.DefaultCaptureKey;
+            CaptureHotkeyModifiers = Hotkey.DefaultModifiers;
             AutoCheckUpdates = true;
         }
     }

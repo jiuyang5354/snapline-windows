@@ -101,6 +101,7 @@ namespace Snapline
     internal static class Hotkey
     {
         internal const uint DefaultKey = 0x54;
+        internal const uint DefaultCaptureKey = 0x53;
         internal const uint DefaultModifiers = 3;
 
         internal static bool IsModifier(uint key)
@@ -136,16 +137,22 @@ namespace Snapline
         private readonly HwndSource source;
         internal event Action ClipboardChanged;
         internal event Action ToggleRequested;
+        internal event Action CaptureRequested;
         internal bool HotkeyRegistered { get; private set; }
         internal int HotkeyError { get; private set; }
         internal uint HotkeyKey { get; private set; }
         internal uint HotkeyModifiers { get; private set; }
         internal int HotkeyId { get; private set; }
         internal string HotkeyText { get { return Hotkey.Text(HotkeyKey, HotkeyModifiers); } }
+        internal bool CaptureHotkeyRegistered { get; private set; }
+        internal uint CaptureHotkeyKey { get; private set; }
+        internal uint CaptureHotkeyModifiers { get; private set; }
+        internal int CaptureHotkeyId { get; private set; }
+        internal string CaptureHotkeyText { get { return Hotkey.Text(CaptureHotkeyKey, CaptureHotkeyModifiers); } }
         internal bool ClipboardRegistered { get; private set; }
         internal IntPtr Handle { get { return source.Handle; } }
 
-        internal MessageSink(uint key, uint modifiers)
+        internal MessageSink(uint key, uint modifiers, uint captureKey, uint captureModifiers)
         {
             source = new HwndSource(new HwndSourceParameters("Snapline messages") {
                 ParentWindow = new IntPtr(-3), Width = 0, Height = 0, WindowStyle = 0
@@ -154,22 +161,27 @@ namespace Snapline
             ClipboardRegistered = Native.AddClipboardFormatListener(source.Handle);
             HotkeyKey = Hotkey.DefaultKey;
             HotkeyModifiers = Hotkey.DefaultModifiers;
+            CaptureHotkeyKey = captureKey;
+            CaptureHotkeyModifiers = captureModifiers;
             string error;
             if (!TrySetHotkey(key, modifiers, out error) && (key != Hotkey.DefaultKey || modifiers != Hotkey.DefaultModifiers))
                 TrySetHotkey(Hotkey.DefaultKey, Hotkey.DefaultModifiers, out error);
             if (!HotkeyRegistered && HotkeyError == 1409) TrySetHotkey(Hotkey.DefaultKey, 7, out error);
+            TrySetCaptureHotkey(captureKey, captureModifiers, out error);
         }
 
         internal bool TrySetHotkey(uint key, uint modifiers, out string error)
         {
             error = Hotkey.Validate(key, modifiers);
             if (error != null) return false;
+            if (CaptureHotkeyRegistered && key == CaptureHotkeyKey && modifiers == CaptureHotkeyModifiers) {
+                error = "显示 / 隐藏与区域截图不能使用同一快捷键。"; return false;
+            }
             if (HotkeyRegistered && key == HotkeyKey && modifiers == HotkeyModifiers) return true;
-            int nextId = HotkeyId == 1 ? 2 : 1;
-            if (!Native.RegisterHotKey(source.Handle, nextId, modifiers | 0x4000, key))
+            int nextId = ReserveHotkey(key, modifiers, 0, out error);
+            if (nextId == 0)
             {
                 HotkeyError = Marshal.GetLastWin32Error();
-                error = "这个按键已被占用或被 Windows 保留，请换一个按键组合。";
                 return false;
             }
             // Reserve the replacement before releasing the current binding.
@@ -179,6 +191,61 @@ namespace Snapline
             HotkeyModifiers = modifiers;
             HotkeyRegistered = true;
             HotkeyError = 0;
+            return true;
+        }
+
+        private bool TrySetCaptureHotkey(uint key, uint modifiers, out string error)
+        {
+            error = Hotkey.Validate(key, modifiers);
+            if (error != null) return false;
+            if (HotkeyRegistered && key == HotkeyKey && modifiers == HotkeyModifiers) {
+                error = "显示 / 隐藏与区域截图不能使用同一快捷键。"; return false;
+            }
+            int id = ReserveHotkey(key, modifiers, 0, out error);
+            if (id == 0) return false;
+            CaptureHotkeyId = id;
+            CaptureHotkeyKey = key;
+            CaptureHotkeyModifiers = modifiers;
+            CaptureHotkeyRegistered = true;
+            return true;
+        }
+
+        private int ReserveHotkey(uint key, uint modifiers, int pendingId, out string error)
+        {
+            error = null;
+            if (HotkeyRegistered && key == HotkeyKey && modifiers == HotkeyModifiers) return HotkeyId;
+            if (CaptureHotkeyRegistered && key == CaptureHotkeyKey && modifiers == CaptureHotkeyModifiers) return CaptureHotkeyId;
+            int id = 1;
+            while ((HotkeyRegistered && id == HotkeyId) || (CaptureHotkeyRegistered && id == CaptureHotkeyId) || id == pendingId) id++;
+            if (Native.RegisterHotKey(source.Handle, id, modifiers | 0x4000, key)) return id;
+            error = "这个按键已被占用或被 Windows 保留，请换一个按键组合。";
+            return 0;
+        }
+
+        private void ReleaseReserved(int id)
+        {
+            if (id != 0 && !(HotkeyRegistered && id == HotkeyId) && !(CaptureHotkeyRegistered && id == CaptureHotkeyId))
+                Native.UnregisterHotKey(source.Handle, id);
+        }
+
+        internal bool TrySetHotkeys(uint key, uint modifiers, uint captureKey, uint captureModifiers, Action save, out string error)
+        {
+            error = Hotkey.Validate(key, modifiers) ?? Hotkey.Validate(captureKey, captureModifiers);
+            if (error != null) return false;
+            if (key == captureKey && modifiers == captureModifiers) {
+                error = "显示 / 隐藏与区域截图不能使用同一快捷键。"; return false;
+            }
+            int nextToggle = ReserveHotkey(key, modifiers, 0, out error);
+            if (nextToggle == 0) { error = "显示 / 隐藏：" + error; return false; }
+            int nextCapture = ReserveHotkey(captureKey, captureModifiers, nextToggle, out error);
+            if (nextCapture == 0) { ReleaseReserved(nextToggle); error = "区域截图：" + error; return false; }
+            try { if (save != null) save(); }
+            catch { ReleaseReserved(nextToggle); ReleaseReserved(nextCapture); throw; }
+            // Keep existing registrations until settings are saved, including when the two bindings swap roles.
+            if (HotkeyRegistered && HotkeyId != nextToggle && HotkeyId != nextCapture) Native.UnregisterHotKey(source.Handle, HotkeyId);
+            if (CaptureHotkeyRegistered && CaptureHotkeyId != nextToggle && CaptureHotkeyId != nextCapture) Native.UnregisterHotKey(source.Handle, CaptureHotkeyId);
+            HotkeyId = nextToggle; HotkeyKey = key; HotkeyModifiers = modifiers; HotkeyRegistered = true; HotkeyError = 0;
+            CaptureHotkeyId = nextCapture; CaptureHotkeyKey = captureKey; CaptureHotkeyModifiers = captureModifiers; CaptureHotkeyRegistered = true;
             return true;
         }
 
@@ -192,6 +259,7 @@ namespace Snapline
         {
             if (message == Native.WM_CLIPBOARDUPDATE && ClipboardChanged != null) ClipboardChanged();
             if (message == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId && HotkeyRegistered && ToggleRequested != null) ToggleRequested();
+            if (message == Native.WM_HOTKEY && wParam.ToInt32() == CaptureHotkeyId && CaptureHotkeyRegistered && CaptureRequested != null) CaptureRequested();
             return IntPtr.Zero;
         }
 
@@ -199,6 +267,8 @@ namespace Snapline
         {
             Native.RemoveClipboardFormatListener(source.Handle);
             ClearHotkey();
+            if (CaptureHotkeyRegistered) Native.UnregisterHotKey(source.Handle, CaptureHotkeyId);
+            CaptureHotkeyRegistered = false;
             source.Dispose();
         }
     }

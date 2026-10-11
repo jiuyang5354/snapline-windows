@@ -1,5 +1,5 @@
 param(
-    [string]$PortableZip = (Join-Path $PSScriptRoot 'Snapline-Windows-v1.4.2.zip'),
+    [string]$PortableZip = (Join-Path $PSScriptRoot 'Snapline-Windows-v1.4.3.zip'),
     [string]$ChecksumFile = (Join-Path (Split-Path $PSScriptRoot -Parent) 'SHA256SUMS.txt'),
     [string]$NsisPath = (Join-Path $PSScriptRoot '.tools\nsis-3.13\makensis.exe'),
     [switch]$Test
@@ -61,7 +61,7 @@ $sourceHash = (Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLo
 Get-Item -LiteralPath $outputFile, $sourceZip | Select-Object FullName, Length
 $feedPath = Join-Path $PSScriptRoot 'dist\update.json'
 if (Test-Path -LiteralPath $feedPath) {
-    $feed = @(Get-Content -LiteralPath $feedPath -Raw | ConvertFrom-Json)
+    $feed = @(Get-Content -LiteralPath $feedPath -Raw | ConvertFrom-Json | ForEach-Object { $_ })
     if ($feed.Count -ne 1 -or $feed[0].tag_name -ne ('v' + $appVersion)) { throw 'Installer does not match the generated update feed version.' }
     $installerName = [System.IO.Path]::GetFileName($outputFile)
     $feed[0].assets = @($feed[0].assets | Where-Object { $_.name -ne $installerName }) + @([ordered]@{

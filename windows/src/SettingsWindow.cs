@@ -12,10 +12,11 @@ namespace Snapline
     {
         private readonly Controller controller;
         internal readonly Border View;
-        private uint key, modifiers;
+        private uint key, modifiers, captureKey, captureModifiers;
+        private string keyError, captureError;
         private string folder;
         private bool startup;
-        internal bool RecordingHotkey { get { return Part<TextBox>("HotkeyInput").IsKeyboardFocusWithin; } }
+        internal bool RecordingHotkey { get { return Part<TextBox>("HotkeyInput").IsKeyboardFocusWithin || Part<TextBox>("CaptureHotkeyInput").IsKeyboardFocusWithin; } }
         private const string KeyHelp = "支持单键和 Ctrl / Alt / Shift / Win 组合。";
 
         internal SettingsWindow(Controller controller)
@@ -41,6 +42,7 @@ namespace Snapline
             Click("CancelSettings", Close);
             Click("SaveSettings", Save);
             Click("RestoreKeys", delegate { SetCandidate(Hotkey.DefaultKey, Hotkey.DefaultModifiers); });
+            Click("RestoreCaptureKeys", delegate { SetCaptureCandidate(Hotkey.DefaultCaptureKey, Hotkey.DefaultModifiers); });
             Click("OpenInbox", controller.OpenInbox);
             Click("ChooseFolder", ChooseFolder);
             Click("RemoveAll", delegate { controller.Store.Clear(); Feedback("已取下所有卡片，原文件保留", false); });
@@ -52,22 +54,9 @@ namespace Snapline
                 string page = name;
                 Part<RadioButton>("Nav" + name).Checked += delegate { ShowPage(page); };
             }
-            TextBox input = Part<TextBox>("HotkeyInput");
-            InputMethod.SetIsInputMethodEnabled(input, false);
-            input.GotKeyboardFocus += delegate { input.BorderBrush = Ui.Brush("Accent"); Part<TextBlock>("KeyHint").Text = "按下按键或组合键；Esc 恢复当前设置，Tab 离开输入框。"; };
-            input.LostKeyboardFocus += delegate { input.BorderBrush = Ui.Brush("Line"); };
-            Loaded += delegate { if (Part<StackPanel>("KeysPage").Visibility == Visibility.Visible) input.Focus(); };
-            input.PreviewKeyDown += delegate(object sender, KeyEventArgs e) {
-                if (e.Key == Key.Tab) return;
-                e.Handled = true;
-                Key pressed = e.Key == Key.System ? e.SystemKey : e.Key;
-                if (pressed == Key.Escape) { SetCandidate(controller.Sink.HotkeyKey, controller.Sink.HotkeyModifiers); return; }
-                bool win = Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin);
-                uint flags = ((Keyboard.Modifiers & ModifierKeys.Control) != 0 ? 2u : 0u) |
-                    ((Keyboard.Modifiers & ModifierKeys.Alt) != 0 ? 1u : 0u) |
-                    ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? 4u : 0u) | (win ? 8u : 0u);
-                SetCandidate((uint)KeyInterop.VirtualKeyFromKey(pressed), flags);
-            };
+            BindInput("HotkeyInput", false);
+            BindInput("CaptureHotkeyInput", true);
+            Loaded += delegate { if (Part<StackPanel>("KeysPage").Visibility == Visibility.Visible) Part<TextBox>("HotkeyInput").Focus(); };
             var settings = controller.Store.Settings;
             Part<CheckBox>("CollectToggle").IsChecked = settings.ListenClipboard;
             Part<CheckBox>("PauseToggle").IsChecked = settings.CollectionPaused;
@@ -82,7 +71,8 @@ namespace Snapline
             Part<TextBlock>("VersionLabel").Text = "Windows · v" + Updates.CurrentVersion;
             Part<TextBlock>("AboutVersion").Text = "v" + Updates.CurrentVersion + " · Windows 预发布";
             SetCandidate(controller.Sink.HotkeyKey, controller.Sink.HotkeyModifiers);
-            Part<TextBlock>("KeyHint").Text = KeyHelp;
+            SetCaptureCandidate(controller.Sink.CaptureHotkeyKey, controller.Sink.CaptureHotkeyModifiers);
+            RefreshKeyHint(KeyHelp);
             foreach (string name in new[] { "CollectToggle", "PauseToggle", "StartupToggle", "UpdateToggle", "CursorToggle" }) {
                 Part<CheckBox>(name).Checked += delegate { Feedback("有未保存的修改", false); };
                 Part<CheckBox>(name).Unchecked += delegate { Feedback("有未保存的修改", false); };
@@ -103,20 +93,60 @@ namespace Snapline
         }
 
         internal void CaptureCurrent(uint currentKey, uint currentModifiers)
-        { if (RecordingHotkey) SetCandidate(currentKey, currentModifiers); }
+        {
+            if (Part<TextBox>("CaptureHotkeyInput").IsKeyboardFocusWithin) SetCaptureCandidate(currentKey, currentModifiers);
+            else if (RecordingHotkey) SetCandidate(currentKey, currentModifiers);
+        }
+
+        private void BindInput(string name, bool capture)
+        {
+            TextBox input = Part<TextBox>(name);
+            InputMethod.SetIsInputMethodEnabled(input, false);
+            input.GotKeyboardFocus += delegate { input.BorderBrush = Ui.Brush("Accent"); RefreshKeyHint("按下按键或组合键；Esc 恢复当前设置，Tab 离开输入框。"); };
+            input.LostKeyboardFocus += delegate { input.BorderBrush = Ui.Brush("Line"); };
+            input.PreviewKeyDown += delegate(object sender, KeyEventArgs e) {
+                if (e.Key == Key.Tab) return;
+                e.Handled = true;
+                Key pressed = e.Key == Key.System ? e.SystemKey : e.Key;
+                if (pressed == Key.Escape) {
+                    SetBinding(capture ? controller.Sink.CaptureHotkeyKey : controller.Sink.HotkeyKey,
+                        capture ? controller.Sink.CaptureHotkeyModifiers : controller.Sink.HotkeyModifiers, capture); return;
+                }
+                bool win = Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin);
+                uint flags = ((Keyboard.Modifiers & ModifierKeys.Control) != 0 ? 2u : 0u) |
+                    ((Keyboard.Modifiers & ModifierKeys.Alt) != 0 ? 1u : 0u) |
+                    ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? 4u : 0u) | (win ? 8u : 0u);
+                SetBinding((uint)KeyInterop.VirtualKeyFromKey(pressed), flags, capture);
+            };
+        }
 
         internal bool SetCandidate(uint candidate, uint flags)
+        { return SetBinding(candidate, flags, false); }
+
+        internal bool SetCaptureCandidate(uint candidate, uint flags)
+        { return SetBinding(candidate, flags, true); }
+
+        private bool SetBinding(uint candidate, uint flags, bool capture)
         {
             if (Hotkey.IsModifier(candidate)) return false;
             string error = Hotkey.Validate(candidate, flags);
-            Part<Button>("SaveSettings").IsEnabled = error == null;
-            Part<TextBlock>("KeyHint").Foreground = Ui.Brush(error == null ? "Muted" : "Accent");
-            if (error != null) { Part<TextBlock>("KeyHint").Text = error; return false; }
-            key = candidate; modifiers = flags;
-            Part<TextBox>("HotkeyInput").Text = Hotkey.Text(key, modifiers);
-            Part<TextBlock>("KeyHint").Text = (flags == 0 ? "单键会影响其他应用中的同名按键。" : "组合已录入。") + "保存后生效。";
+            if (capture) captureError = error; else keyError = error;
+            if (error != null) { RefreshKeyHint(KeyHelp); return false; }
+            if (capture) { captureKey = candidate; captureModifiers = flags; }
+            else { key = candidate; modifiers = flags; }
+            Part<TextBox>(capture ? "CaptureHotkeyInput" : "HotkeyInput").Text = Hotkey.Text(candidate, flags);
+            RefreshKeyHint((flags == 0 ? "单键会影响其他应用中的同名按键。" : "组合已录入。") + "保存后生效。");
             Feedback("有未保存的修改", false);
             return true;
+        }
+
+        private void RefreshKeyHint(string text)
+        {
+            string error = keyError ?? captureError;
+            if (error == null && key == captureKey && modifiers == captureModifiers) error = "显示 / 隐藏与区域截图不能使用同一快捷键。";
+            Part<Button>("SaveSettings").IsEnabled = error == null;
+            Part<TextBlock>("KeyHint").Foreground = Ui.Brush(error == null ? "Muted" : "Accent");
+            Part<TextBlock>("KeyHint").Text = error ?? text;
         }
 
         private void ChooseFolder()
@@ -133,7 +163,7 @@ namespace Snapline
             string error;
             if (!controller.ApplyPreferences(Part<CheckBox>("CollectToggle").IsChecked == true, Part<CheckBox>("PauseToggle").IsChecked == true,
                 Part<CheckBox>("UpdateToggle").IsChecked == true, Part<CheckBox>("CursorToggle").IsChecked == true,
-                folder, key, modifiers, out error)) {
+                folder, key, modifiers, captureKey, captureModifiers, out error)) {
                 Feedback(error, true);
                 Part<TextBlock>("KeyHint").Text = error;
                 Part<TextBlock>("KeyHint").Foreground = Ui.Brush("Accent");

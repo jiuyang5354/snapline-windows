@@ -72,7 +72,7 @@
           </StackPanel>
           <StackPanel x:Name="CapturePage" Visibility="Collapsed">
             <TextBlock Text="截图" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="从截图栏或托盘选择“区域截图”，拖动框选。" Style="{StaticResource Quiet}" Margin="0,8,0,24" />
+            <TextBlock Text="按区域截图快捷键，或从截图栏、托盘截图；拖动框选。" Style="{StaticResource Quiet}" Margin="0,8,0,24" />
             <Grid Style="{StaticResource SettingRow}">
               <StackPanel VerticalAlignment="Center">
                 <TextBlock Text="截图包含鼠标指针" />
@@ -87,12 +87,20 @@
           </StackPanel>
           <StackPanel x:Name="KeysPage" Visibility="Collapsed">
             <TextBlock Text="快捷键" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="把截图晾衣绳叫出来，也可以随时收起。" Style="{StaticResource Quiet}" Margin="0,8,0,17" />
-            <TextBlock Text="显示 / 隐藏截图栏" FontWeight="SemiBold" />
-            <TextBlock Text="点击输入框，再按下你想使用的按键。" Style="{StaticResource Quiet}" Margin="0,8,0,13" />
-            <TextBox x:Name="HotkeyInput" Height="58" IsReadOnly="True" Text="Ctrl + Alt + T" FontFamily="Consolas" FontSize="23" TextAlignment="Center" VerticalContentAlignment="Center" Background="{DynamicResource Tint}" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="12,0" CaretBrush="Transparent" AutomationProperties.Name="录入显示隐藏快捷键" />
-            <TextBlock x:Name="KeyHint" Text="支持单键和 Ctrl / Alt / Shift / Win 组合。" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" TextWrapping="Wrap" LineHeight="20" MinHeight="35" />
-            <Button x:Name="RestoreKeys" Content="恢复默认" HorizontalAlignment="Left" Margin="0,8,0,12" />
+            <TextBlock Text="点击对应输入框，再按下你想使用的按键。" Style="{StaticResource Quiet}" Margin="0,8,0,22" />
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="128" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <TextBlock Text="显示 / 隐藏截图栏" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <TextBox x:Name="HotkeyInput" Grid.Column="1" Height="46" IsReadOnly="True" Text="Ctrl + Alt + T" FontFamily="Consolas" FontSize="20" TextAlignment="Center" VerticalContentAlignment="Center" Background="{DynamicResource Tint}" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="12,0" CaretBrush="Transparent" AutomationProperties.Name="录入显示隐藏快捷键" />
+              <Button x:Name="RestoreKeys" Grid.Column="2" Content="恢复默认" Margin="12,0,0,0" VerticalAlignment="Center" />
+            </Grid>
+            <Grid Margin="0,16,0,0">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="128" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <TextBlock Text="区域截图" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <TextBox x:Name="CaptureHotkeyInput" Grid.Column="1" Height="46" IsReadOnly="True" Text="Ctrl + Alt + S" FontFamily="Consolas" FontSize="20" TextAlignment="Center" VerticalContentAlignment="Center" Background="{DynamicResource Tint}" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="12,0" CaretBrush="Transparent" AutomationProperties.Name="录入区域截图快捷键" />
+              <Button x:Name="RestoreCaptureKeys" Grid.Column="2" Content="恢复默认" Margin="12,0,0,0" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock x:Name="KeyHint" Text="支持单键和 Ctrl / Alt / Shift / Win 组合。" Foreground="{DynamicResource Muted}" Margin="0,14,0,14" TextWrapping="Wrap" LineHeight="20" MinHeight="40" />
             <Border Style="{StaticResource Rule}" />
             <TextBlock Text="悬停图片快捷操作" FontWeight="SemiBold" Margin="0,19,0,0" />
             <TextBlock Text="C 复制 · A 用画图编辑 · D / Delete 取下&#10;仅鼠标指向截图时生效，按住不会连续取下。" Style="{StaticResource Quiet}" Margin="0,8,0,0" LineHeight="22" />

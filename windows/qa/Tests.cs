@@ -50,6 +50,17 @@ namespace Snapline
         {
             if (args.Length == 2 && args[0] == "--network") return CheckNetwork(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--editor") return CheckPaint(Path.GetFullPath(args[1]));
+            if (args.Length == 2 && args[0] == "--bindings") {
+                string bindingOutput = Path.GetFullPath(args[1]); Directory.CreateDirectory(bindingOutput);
+                var bindingApp = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                try {
+                    CheckBindingRegistrations();
+                    File.WriteAllLines(Path.Combine(bindingOutput, "binding-results.txt"), checks);
+                    Console.WriteLine("PASS " + checks.Count + " binding checks without keyboard, mouse or clipboard input."); return 0;
+                }
+                catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+                finally { bindingApp.Shutdown(); }
+            }
             bool featuresOnly = args.Length == 2 && args[0] == "--features";
             bool announcementsOnly = args.Length == 2 && args[0] == "--announcements";
             string output = Path.GetFullPath(args[featuresOnly || announcementsOnly ? 1 : 0]);
@@ -113,6 +124,8 @@ namespace Snapline
                 string liveRoot = Path.Combine(root, "live");
                 var liveSettings = new ImageStore(liveRoot);
                 liveSettings.Settings.HotkeyKey = FreeHotkey(7);
+                liveSettings.Settings.CaptureHotkeyKey = FreeHotkey(6);
+                liveSettings.Settings.CaptureHotkeyModifiers = 6;
                 liveSettings.Settings.HotkeyModifiers = 7;
                 liveSettings.Save();
                 controller = new Controller(liveRoot, false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
@@ -253,6 +266,7 @@ namespace Snapline
                 full.Close();
 
                 CheckHotkeys(controller, root, output);
+                CheckCaptureHotkeys(controller, root, output);
                 CheckSettings(controller, output);
                 CheckConvenience(controller, root);
                 CheckUpdates(root, output);
@@ -266,6 +280,8 @@ namespace Snapline
                     var saved = new ImageStore(Path.Combine(root, "live")).Settings;
                     Check(restarted.Sink.HotkeyRegistered && restarted.Sink.HotkeyKey == saved.HotkeyKey &&
                         restarted.Sink.HotkeyModifiers == saved.HotkeyModifiers, "Custom shortcut is registered again after restart");
+                    Check(restarted.Sink.CaptureHotkeyRegistered && restarted.Sink.CaptureHotkeyKey == saved.CaptureHotkeyKey &&
+                        restarted.Sink.CaptureHotkeyModifiers == saved.CaptureHotkeyModifiers, "Custom region capture shortcut is registered again after restart");
                 }
                 SmokeExecutable(root);
                 File.WriteAllLines(Path.Combine(output, "test-results.txt"), checks);
@@ -592,6 +608,14 @@ namespace Snapline
 
         private static void TypeKey(int key) { PressKey(key); PressKey(key, true); }
 
+        private static void TypeShortcut(uint key, uint modifiers)
+        {
+            int[] keys = new[] { 0x11, 0x12, 0x10, 0x5b }; uint[] flags = new[] { 2u, 1u, 4u, 8u };
+            for (int i = 0; i < keys.Length; i++) if ((modifiers & flags[i]) != 0) PressKey(keys[i]);
+            try { TypeKey((int)key); }
+            finally { for (int i = keys.Length - 1; i >= 0; i--) if ((modifiers & flags[i]) != 0) PressKey(keys[i], true); }
+        }
+
         private static void PointAt(Point point)
         { SetCursorPos((int)Math.Round(point.X), (int)Math.Round(point.Y)); Pump(80); }
 
@@ -614,6 +638,7 @@ namespace Snapline
             var preferences = new ImageStore(featureRoot);
             preferences.Settings.ListenClipboard = false; preferences.Settings.CollectionPaused = true;
             preferences.Settings.AutoCheckUpdates = false; preferences.Settings.HotkeyKey = FreeHotkey(7); preferences.Settings.HotkeyModifiers = 7;
+            preferences.Settings.CaptureHotkeyKey = FreeHotkey(6); preferences.Settings.CaptureHotkeyModifiers = 6;
             preferences.Save();
             try
             {
@@ -894,7 +919,51 @@ namespace Snapline
                 Check(pixel.SequenceEqual(new byte[] { 170, 100, 35, 255 }) &&
                     ImageStore.Digest(BitmapFrame.Create((Stream)Clipboard.GetData("PNG"), BitmapCreateOptions.None, BitmapCacheOption.OnLoad)) == ImageStore.Digest(captured),
                     "The complete screenshot command retains the generated window pixels and the same lossless PNG on the clipboard");
+                string error;
+                uint customCapture = FreeHotkey(6);
+                Check(controller.ChangeHotkeys(controller.Sink.HotkeyKey, controller.Sink.HotkeyModifiers, customCapture, 6, out error),
+                    "The live capture command accepts a separate customized global shortcut");
+                controller.Busy = true;
+                TypeShortcut(customCapture, 6); Pump(400);
+                Check(!Forms.Application.OpenForms.OfType<RegionCapture>().Any(), "The capture shortcut respects the existing busy-dialog guard");
+                controller.Busy = false; count = controller.Store.Items.Count;
+                CaptureShortcutAction(controller, delegate(RegionCapture picker) {
+                    Check(!controller.Line.IsVisible, "Global capture hides the shelf before sampling the desktop");
+                    TypeShortcut(customCapture, 6);
+                    Check(Forms.Application.OpenForms.OfType<RegionCapture>().Count() == 1, "Pressing the capture shortcut during selection does not open another picker");
+                    var start = picker.PointToClient(new System.Drawing.Point(bounds.Left + 100, bounds.Top + 100));
+                    var end = picker.PointToClient(new System.Drawing.Point(bounds.Left + 320, bounds.Top + 230));
+                    SelectRegion(picker, start.X, start.Y, end.X, end.Y);
+                });
+                captured = ImageStore.Load(controller.Store.Items.Last().Path, 0);
+                Check(controller.Store.Items.Count == count + 1 && captured.PixelWidth == 220 && captured.PixelHeight == 130 && !controller.Busy &&
+                    controller.Store.Settings.CollectionPaused && !controller.Store.Settings.ListenClipboard,
+                    "A real custom global shortcut completes region capture while automatic collection remains paused");
+                Check(ImageStore.Digest(BitmapFrame.Create((Stream)Clipboard.GetData("PNG"), BitmapCreateOptions.None, BitmapCacheOption.OnLoad)) == ImageStore.Digest(captured),
+                    "The global capture shortcut saves and copies the exact same lossless PNG pixels");
+                count = controller.Store.Items.Count;
+                CaptureShortcutAction(controller, delegate(RegionCapture picker) { TypeKey(0x1b); });
+                Check(controller.Store.Items.Count == count && !controller.Busy && !Forms.Application.OpenForms.OfType<RegionCapture>().Any(),
+                    "Escape cancels a globally triggered screenshot without saving an image or leaving the app busy");
                 host.Close();
+            }
+        }
+
+        private static void CaptureShortcutAction(Controller controller, Action<RegionCapture> action)
+        {
+            bool opened = false; Exception failure = null;
+            using (var timer = new Forms.Timer { Interval = 75 }) {
+                timer.Tick += delegate {
+                    var picker = Forms.Application.OpenForms.OfType<RegionCapture>().FirstOrDefault();
+                    if (picker == null) return;
+                    timer.Stop(); opened = true;
+                    try { action(picker); }
+                    catch (Exception ex) { failure = ex; }
+                    finally { if (!picker.IsDisposed && picker.Visible) picker.Close(); }
+                };
+                timer.Start(); TypeShortcut(controller.Sink.CaptureHotkeyKey, controller.Sink.CaptureHotkeyModifiers); Pump(1800);
+                if (failure != null) throw failure;
+                Check(opened, "A physical global shortcut reaches the region picker through RegisterHotKey");
             }
         }
 
@@ -1059,8 +1128,15 @@ namespace Snapline
             Directory.CreateDirectory(legacyRoot);
             File.WriteAllText(Path.Combine(legacyRoot, "settings.json"), "{\"ListenClipboard\":false,\"Paths\":[]}");
             var legacy = new ImageStore(legacyRoot).Settings;
-            Check(legacy.HotkeyKey == Hotkey.DefaultKey && legacy.HotkeyModifiers == Hotkey.DefaultModifiers && !legacy.ListenClipboard,
-                "Older settings gain the default shortcut without changing clipboard preferences");
+            Check(legacy.HotkeyKey == Hotkey.DefaultKey && legacy.HotkeyModifiers == Hotkey.DefaultModifiers && !legacy.ListenClipboard &&
+                legacy.CaptureHotkeyKey == Hotkey.DefaultCaptureKey && legacy.CaptureHotkeyModifiers == Hotkey.DefaultModifiers,
+                "Older settings gain both default shortcuts without changing clipboard preferences");
+            string legacyCustomRoot = Path.Combine(root, "legacy-custom-settings");
+            Directory.CreateDirectory(legacyCustomRoot);
+            File.WriteAllText(Path.Combine(legacyCustomRoot, "settings.json"), "{\"HotkeyKey\":83,\"HotkeyModifiers\":3,\"CollectionPaused\":true,\"IncludeCursor\":true,\"Paths\":[]}");
+            legacy = new ImageStore(legacyCustomRoot).Settings;
+            Check(legacy.HotkeyKey == 83 && legacy.HotkeyModifiers == 3 && legacy.CaptureHotkeyKey == Hotkey.DefaultCaptureKey &&
+                legacy.CollectionPaused && legacy.IncludeCursor, "Migrating a legacy custom display shortcut retains it and existing capture preferences");
             Check(Hotkey.Modifiers(Forms.Keys.Control | Forms.Keys.Alt | Forms.Keys.Shift | Forms.Keys.H, true) == 15,
                 "Recording includes Ctrl, Alt, Shift and Win modifiers");
 
@@ -1132,6 +1208,121 @@ namespace Snapline
                     "Restore Default selects Ctrl + Alt + T in the dialog");
                 dialog.Part<Button>("CancelSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             });
+        }
+
+        private static void CheckBindingRegistrations()
+        {
+            uint display = FreeHotkey(7), capture = FreeHotkey(6);
+            string error;
+            using (var sink = new MessageSink(display, 7, capture, 6)) {
+                Check(sink.HotkeyRegistered && sink.CaptureHotkeyRegistered && sink.HotkeyId != sink.CaptureHotkeyId,
+                    "Display and capture commands have separate active native registrations");
+                int toggles = 0, captures = 0;
+                sink.ToggleRequested += delegate { toggles++; }; sink.CaptureRequested += delegate { captures++; };
+                SendMessage(sink.Handle, Native.WM_HOTKEY, new IntPtr(sink.HotkeyId), IntPtr.Zero);
+                SendMessage(sink.Handle, Native.WM_HOTKEY, new IntPtr(sink.CaptureHotkeyId), IntPtr.Zero);
+                Check(toggles == 1 && captures == 1, "Native hotkey messages dispatch to their corresponding commands");
+                int displayId = sink.HotkeyId, captureId = sink.CaptureHotkeyId;
+                Check(!sink.TrySetHotkeys(display, 7, display, 7, null, out error) && error.Contains("同一") &&
+                    sink.HotkeyId == displayId && sink.CaptureHotkeyId == captureId, "Duplicate shortcuts preserve both active native registrations");
+                Check(!sink.TrySetHotkeys(display, 7, 0x7b, 0, null, out error) && error.Contains("F12"),
+                    "Reserved F12 is rejected for the capture shortcut");
+                uint occupied = FreeHotkey(6), replacement = FreeHotkey(7);
+                Check(Native.RegisterHotKey(IntPtr.Zero, 90, 0x4006, occupied), "Capture conflict fixture owns a real native hotkey");
+                try {
+                    Check(!sink.TrySetHotkeys(replacement, 7, occupied, 6, null, out error) && error.StartsWith("区域截图") &&
+                        sink.HotkeyId == displayId && sink.CaptureHotkeyId == captureId,
+                        "A capture conflict preserves both commands even when display also changes");
+                    bool released = Native.RegisterHotKey(IntPtr.Zero, 91, 0x4007, replacement);
+                    if (released) Native.UnregisterHotKey(IntPtr.Zero, 91);
+                    Check(released, "A failed pair change releases its provisional display registration");
+                }
+                finally { Native.UnregisterHotKey(IntPtr.Zero, 90); }
+                uint nextCapture = FreeHotkey(6);
+                bool failed = false;
+                try { sink.TrySetHotkeys(replacement, 7, nextCapture, 6, delegate { throw new IOException("Generated save failure"); }, out error); }
+                catch (IOException) { failed = true; }
+                Check(failed && sink.HotkeyId == displayId && sink.CaptureHotkeyId == captureId && sink.HotkeyRegistered && sink.CaptureHotkeyRegistered,
+                    "A save exception keeps both original registrations without releasing and reacquiring them");
+                bool displayReleased = Native.RegisterHotKey(IntPtr.Zero, 90, 0x4007, replacement);
+                bool captureReleased = Native.RegisterHotKey(IntPtr.Zero, 91, 0x4006, nextCapture);
+                if (displayReleased) Native.UnregisterHotKey(IntPtr.Zero, 90);
+                if (captureReleased) Native.UnregisterHotKey(IntPtr.Zero, 91);
+                Check(displayReleased && captureReleased, "Save rollback releases both provisional registrations");
+                Check(sink.TrySetHotkeys(capture, 6, display, 7, null, out error) && sink.HotkeyId == captureId && sink.CaptureHotkeyId == displayId,
+                    "Swapping the two shortcuts reuses their existing native registrations");
+                SendMessage(sink.Handle, Native.WM_HOTKEY, new IntPtr(sink.HotkeyId), IntPtr.Zero);
+                Check(toggles == 2 && captures == 1, "Swapped registrations dispatch to the new logical command");
+            }
+            bool displayFree = Native.RegisterHotKey(IntPtr.Zero, 90, 0x4007, display);
+            bool captureFree = Native.RegisterHotKey(IntPtr.Zero, 91, 0x4006, capture);
+            if (displayFree) Native.UnregisterHotKey(IntPtr.Zero, 90);
+            if (captureFree) Native.UnregisterHotKey(IntPtr.Zero, 91);
+            Check(displayFree && captureFree, "Disposing a swapped pair releases both native registrations");
+            using (var legacy = new MessageSink(display, 7, display, 7)) {
+                Check(legacy.HotkeyRegistered && !legacy.CaptureHotkeyRegistered && legacy.HotkeyKey == display && legacy.HotkeyModifiers == 7,
+                    "A duplicate legacy capture default leaves the existing display shortcut intact");
+                Check(legacy.TrySetHotkeys(display, 7, capture, 6, null, out error) && legacy.CaptureHotkeyRegistered,
+                    "Choosing a different capture shortcut enables it after a startup conflict");
+            }
+        }
+
+        private static void CheckCaptureHotkeys(Controller controller, string root, string output)
+        {
+            CheckBindingRegistrations();
+            controller.Busy = true;
+            uint display = controller.Sink.HotkeyKey, displayFlags = controller.Sink.HotkeyModifiers;
+            uint capture = FreeHotkey(6);
+            string error;
+            Check(controller.ChangeHotkeys(display, displayFlags, capture, 6, out error) && controller.Sink.CaptureHotkeyRegistered,
+                "A custom region capture shortcut applies while keeping the display shortcut");
+            var saved = new ImageStore(controller.Store.Root).Settings;
+            Check(saved.CaptureHotkeyKey == capture && saved.CaptureHotkeyModifiers == 6 && saved.HotkeyKey == display,
+                "Both shortcuts are persisted independently to settings.json");
+            int displayId = controller.Sink.HotkeyId, captureId = controller.Sink.CaptureHotkeyId;
+            using (var locked = new FileStream(Path.Combine(controller.Store.Root, "settings.json.tmp"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+                Check(!controller.ApplyPreferences(false, true, false, true, controller.Store.Settings.WatchFolder, FreeHotkey(7), 7, FreeHotkey(6), 6, out error) &&
+                    controller.Sink.HotkeyId == displayId && controller.Sink.CaptureHotkeyId == captureId &&
+                    controller.Store.Settings.CaptureHotkeyKey == capture && new ImageStore(controller.Store.Root).Settings.CaptureHotkeyKey == capture,
+                    "An actual settings write failure leaves both native registrations and saved capture preference unchanged");
+            DialogAction(controller, delegate(SettingsWindow dialog) {
+                var input = dialog.Part<TextBox>("CaptureHotkeyInput"); input.Focus();
+                SendMessage(controller.Sink.Handle, Native.WM_HOTKEY, new IntPtr(captureId), IntPtr.Zero);
+                Check(input.Text == controller.Sink.CaptureHotkeyText && !Forms.Application.OpenForms.OfType<RegionCapture>().Any(),
+                    "Recording the active capture shortcut fills its input without opening a picker");
+                dialog.SetCaptureCandidate(display, displayFlags);
+                Check(!dialog.Part<Button>("SaveSettings").IsEnabled && dialog.Part<TextBlock>("KeyHint").Text.Contains("同一"),
+                    "Settings shows an inline duplicate error and disables Save");
+                dialog.SetCaptureCandidate(capture, 6);
+                dialog.SetCandidate(0x7b, 0); dialog.SetCaptureCandidate(FreeHotkey(6), 6);
+                Check(!dialog.Part<Button>("SaveSettings").IsEnabled && dialog.Part<TextBlock>("KeyHint").Text.Contains("F12"),
+                    "Editing capture does not clear an unresolved display validation error");
+                dialog.SetCandidate(display, displayFlags); dialog.SetCaptureCandidate(0x7b, 0); dialog.SetCandidate(display, displayFlags);
+                Check(!dialog.Part<Button>("SaveSettings").IsEnabled, "Editing display does not clear an unresolved capture validation error");
+                dialog.Part<Button>("RestoreCaptureKeys").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(input.Text == Hotkey.Text(Hotkey.DefaultCaptureKey, Hotkey.DefaultModifiers) && dialog.Part<Button>("SaveSettings").IsEnabled,
+                    "Restore Capture Default selects Ctrl + Alt + S and clears its validation error");
+                input.Focus(); SendMessage(new WindowInteropHelper(dialog).Handle, 0x0100, new IntPtr(0x1b), IntPtr.Zero);
+                Check(input.Text == controller.Sink.CaptureHotkeyText, "Escape restores the active capture shortcut in its own input");
+                uint single = FreeHotkey(0);
+                input.Focus(); SendMessage(new WindowInteropHelper(dialog).Handle, 0x0100, new IntPtr(single), IntPtr.Zero);
+                Check(input.Text == Hotkey.Text(single, 0), "The capture input records a real native single-key message");
+                dialog.Part<Button>("SaveSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            });
+            Check(controller.Sink.CaptureHotkeyModifiers == 0 && new ImageStore(controller.Store.Root).Settings.CaptureHotkeyKey == controller.Sink.CaptureHotkeyKey,
+                "Saving the capture input applies and persists a single-key shortcut");
+            uint singleCapture = controller.Sink.CaptureHotkeyKey;
+            DialogAction(controller, delegate(SettingsWindow dialog) {
+                dialog.SetCaptureCandidate(FreeHotkey(6), 6);
+                dialog.Part<Button>("CancelSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            });
+            Check(controller.Sink.CaptureHotkeyKey == singleCapture && new ImageStore(controller.Store.Root).Settings.CaptureHotkeyKey == singleCapture,
+                "Canceling a capture shortcut edit preserves active and saved values");
+            Check(controller.ChangeHotkeys(display, displayFlags, capture, 6, out error), "A capture combination can replace a single key");
+            var tray = (Forms.NotifyIcon)typeof(Controller).GetField("tray", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(controller);
+            Check(tray.ContextMenuStrip.Items.OfType<Forms.ToolStripMenuItem>().Any(item => item.Text.StartsWith("区域截图") && item.Text.Contains(controller.Sink.CaptureHotkeyText)),
+                "The tray capture command displays the custom capture shortcut");
+            DialogAction(controller, delegate(SettingsWindow dialog) { SaveSettingsRender(dialog, Path.Combine(output, "capture-hotkey-dialog.png")); });
         }
 
         private static void DialogAction(Controller controller, Action<SettingsWindow> action)

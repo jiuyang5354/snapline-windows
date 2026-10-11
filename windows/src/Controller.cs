@@ -38,6 +38,7 @@ namespace Snapline
         private bool disposed;
         private readonly Forms.ToolStripMenuItem clipboardMenu;
         private readonly Forms.ToolStripMenuItem toggleMenu;
+        private readonly Forms.ToolStripMenuItem captureMenu;
         private readonly Forms.ToolStripMenuItem latestMenu;
         private readonly Forms.ToolStripMenuItem pauseMenu;
         private readonly Forms.ToolStripMenuItem updateMenu;
@@ -61,14 +62,14 @@ namespace Snapline
             updates = updateClient ?? new Updates();
             Store = new ImageStore(root);
             Line = new LineWindow(this);
-            Sink = new MessageSink(Store.Settings.HotkeyKey, Store.Settings.HotkeyModifiers);
+            Sink = new MessageSink(Store.Settings.HotkeyKey, Store.Settings.HotkeyModifiers, Store.Settings.CaptureHotkeyKey, Store.Settings.CaptureHotkeyModifiers);
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Snapline.ico")) icon = new Icon(stream);
             tray = new Forms.NotifyIcon { Icon = icon, Text = "Snapline · 截图晾衣绳", Visible = true };
             var menu = new Forms.ContextMenuStrip();
             toggleMenu = Add(menu, "显示 / 隐藏    " + (Sink.HotkeyRegistered ? Sink.HotkeyText : "点击托盘图标"), Toggle);
             Add(menu, "设置…", delegate { ShowSettings("General"); });
             Add(menu, "设置快捷键…", ShowHotkeySettings);
-            Add(menu, "区域截图…", CaptureRegion);
+            captureMenu = Add(menu, "区域截图…    " + (Sink.CaptureHotkeyRegistered ? Sink.CaptureHotkeyText : "快捷键未启用"), CaptureRegion);
             latestMenu = Add(menu, "复制最近一张", delegate { CopyLatest(); });
             latestMenu.Enabled = Store.Items.Count > 0;
             Add(menu, "挂入图片…", Import);
@@ -113,6 +114,10 @@ namespace Snapline
                 if (settingsWindow != null && settingsWindow.RecordingHotkey) settingsWindow.CaptureCurrent(Sink.HotkeyKey, Sink.HotkeyModifiers);
                 else Toggle();
             };
+            Sink.CaptureRequested += delegate {
+                if (settingsWindow != null && settingsWindow.RecordingHotkey) settingsWindow.CaptureCurrent(Sink.CaptureHotkeyKey, Sink.CaptureHotkeyModifiers);
+                else CaptureRegion();
+            };
             if (watchFiles)
             {
                 watch = new CaptureWatch(Store, dispatcher);
@@ -138,6 +143,7 @@ namespace Snapline
             else if (Sink.HotkeyKey != Store.Settings.HotkeyKey || Sink.HotkeyModifiers != Store.Settings.HotkeyModifiers)
                 Notify("保存的快捷键无法注册，本次使用 " + Sink.HotkeyText + " 展开 / 收起。可从托盘重新设置。");
             if (!Sink.ClipboardRegistered) Notify("剪贴板监听注册失败。仍可从托盘挂入图片或监听截图文件夹。");
+            if (!Sink.CaptureHotkeyRegistered) Notify("区域截图快捷键 " + Sink.CaptureHotkeyText + " 无法注册。请在设置 → 快捷键中更改，仍可从截图栏或托盘截图。");
             if (Store.Items.Count == 0)
             {
                 tray.ShowBalloonTip(5000, "Snapline · 截图晾衣绳", "按 Win + Shift + S 截图；鼠标停在屏幕顶端即可展开。右键托盘图标打开菜单。", Forms.ToolTipIcon.Info);
@@ -340,6 +346,9 @@ namespace Snapline
         }
 
         internal bool ApplyPreferences(bool clipboard, bool paused, bool automatic, bool includeCursor, string folder, uint key, uint modifiers, out string error)
+        { return ApplyPreferences(clipboard, paused, automatic, includeCursor, folder, key, modifiers, Store.Settings.CaptureHotkeyKey, Store.Settings.CaptureHotkeyModifiers, out error); }
+
+        internal bool ApplyPreferences(bool clipboard, bool paused, bool automatic, bool includeCursor, string folder, uint key, uint modifiers, uint captureKey, uint captureModifiers, out string error)
         {
             var settings = Store.Settings;
             bool oldClipboard = settings.ListenClipboard, oldPaused = settings.CollectionPaused, oldAutomatic = settings.AutoCheckUpdates;
@@ -348,7 +357,7 @@ namespace Snapline
             settings.ListenClipboard = clipboard; settings.CollectionPaused = paused;
             settings.AutoCheckUpdates = automatic; settings.WatchFolder = folder;
             settings.IncludeCursor = includeCursor;
-            if (!ChangeHotkey(key, modifiers, out error)) {
+            if (!ChangeHotkeys(key, modifiers, captureKey, captureModifiers, out error)) {
                 settings.ListenClipboard = oldClipboard; settings.CollectionPaused = oldPaused;
                 settings.AutoCheckUpdates = oldAutomatic; settings.WatchFolder = oldFolder;
                 settings.IncludeCursor = oldCursor;
@@ -587,26 +596,31 @@ namespace Snapline
         }
 
         internal bool ChangeHotkey(uint key, uint modifiers, out string error)
+        { return ChangeHotkeys(key, modifiers, Store.Settings.CaptureHotkeyKey, Store.Settings.CaptureHotkeyModifiers, out error); }
+
+        internal bool ChangeHotkeys(uint key, uint modifiers, uint captureKey, uint captureModifiers, out string error)
         {
-            uint oldKey = Sink.HotkeyKey, oldModifiers = Sink.HotkeyModifiers;
             uint savedKey = Store.Settings.HotkeyKey, savedModifiers = Store.Settings.HotkeyModifiers;
-            bool wasRegistered = Sink.HotkeyRegistered;
-            if (!Sink.TrySetHotkey(key, modifiers, out error)) return false;
-            Store.Settings.HotkeyKey = key;
-            Store.Settings.HotkeyModifiers = modifiers;
-            try { Store.Save(); }
+            uint savedCaptureKey = Store.Settings.CaptureHotkeyKey, savedCaptureModifiers = Store.Settings.CaptureHotkeyModifiers;
+            try {
+                if (!Sink.TrySetHotkeys(key, modifiers, captureKey, captureModifiers, delegate {
+                    Store.Settings.HotkeyKey = key; Store.Settings.HotkeyModifiers = modifiers;
+                    Store.Settings.CaptureHotkeyKey = captureKey; Store.Settings.CaptureHotkeyModifiers = captureModifiers;
+                    Store.Save();
+                }, out error)) return false;
+            }
             catch (Exception ex)
             {
                 if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw;
                 Store.Settings.HotkeyKey = savedKey;
                 Store.Settings.HotkeyModifiers = savedModifiers;
-                string restoreError;
-                if (wasRegistered) Sink.TrySetHotkey(oldKey, oldModifiers, out restoreError);
-                else Sink.ClearHotkey();
+                Store.Settings.CaptureHotkeyKey = savedCaptureKey;
+                Store.Settings.CaptureHotkeyModifiers = savedCaptureModifiers;
                 error = "无法保存快捷键设置，请检查数据文件夹是否可写后再试。";
                 return false;
             }
             toggleMenu.Text = "显示 / 隐藏    " + Sink.HotkeyText;
+            captureMenu.Text = "区域截图…    " + Sink.CaptureHotkeyText;
             Line.RefreshStatus();
             return true;
         }
@@ -632,7 +646,7 @@ namespace Snapline
         internal void Help()
         {
             Busy = true;
-            try { MessageBox.Show("Win + Shift + S 或 PrintScreen 截图后，图片自动挂入。\n收集剪贴板图片也会收集从其他应用复制的图片，可在托盘菜单关闭。\n\n鼠标在屏幕顶端停留，或 " + Sink.HotkeyText + "：展开 / 收起。\n右键托盘 → 设置快捷键：录入单键或组合键，保存后立即生效。\n单击：复制图片。双击：用默认图片应用打开。\n长按 0.45 秒：用画图编辑，保存后刷新缩略图。\n鼠标指向截图时，C 复制、A 编辑、D / Delete 取下。\n拖入应用：发送图片或文件副本。\n拖入文件夹：由目标应用决定复制或移动；Shift 拖动可请求移动。\n右键：另存为、在文件夹中显示或取下。\n\n工具条或托盘 → 区域截图：拖动框选，Esc 取消。\n设置 → 截图 → 截图包含鼠标指针：默认关闭。\n开启后先框选，再摆放指针，按 Enter 截图；不改变 Win + Shift + S。\n\n托盘 → 复制最近一张：直接复制，无须展开。\n暂停所有自动收集：同时暂停剪贴板和文件夹，重启后保持。\n开机启动：可选，默认关闭；移动程序后请重新勾选。\n自动检查更新：默认开启，每 24 小时检查并提醒；可关闭。\n安装版下载 EXE 后点击安装更新，覆盖升级；便携版退出后解压 ZIP。\n\n叉号或 D / Delete：收件夹图片进入回收站；外部原文件保留。\n最多保留 12 张，屏幕较窄时显示最近几张；旧文件仍在收件夹。\n\nSnapline " + Updates.CurrentVersion + " · Windows 非官方移植版\n基于 Alejandro Buján 的 Tendedero 交互与 MIT 代码。", "Snapline · 使用说明", MessageBoxButton.OK, MessageBoxImage.Information); }
+            try { MessageBox.Show("Win + Shift + S 或 PrintScreen 截图后，图片自动挂入。\n收集剪贴板图片也会收集从其他应用复制的图片，可在托盘菜单关闭。\n\n鼠标在屏幕顶端停留，或 " + Sink.HotkeyText + "：展开 / 收起。\n右键托盘 → 设置快捷键：录入单键或组合键，保存后立即生效。\n单击：复制图片。双击：用默认图片应用打开。\n长按 0.45 秒：用画图编辑，保存后刷新缩略图。\n鼠标指向截图时，C 复制、A 编辑、D / Delete 取下。\n拖入应用：发送图片或文件副本。\n拖入文件夹：由目标应用决定复制或移动；Shift 拖动可请求移动。\n右键：另存为、在文件夹中显示或取下。\n\n" + Sink.CaptureHotkeyText + " 或工具条、托盘 → 区域截图：拖动框选，Esc 取消。\n设置 → 快捷键：分别自定义显示与区域截图按键。\n设置 → 截图 → 截图包含鼠标指针：默认关闭。\n开启后先框选，再摆放指针，按 Enter 截图；不改变 Win + Shift + S。\n\n托盘 → 复制最近一张：直接复制，无须展开。\n暂停所有自动收集：同时暂停剪贴板和文件夹，重启后保持。\n开机启动：可选，默认关闭；移动程序后请重新勾选。\n自动检查更新：默认开启，每 24 小时检查并提醒；可关闭。\n安装版下载 EXE 后点击安装更新，覆盖升级；便携版退出后解压 ZIP。\n\n叉号或 D / Delete：收件夹图片进入回收站；外部原文件保留。\n最多保留 12 张，屏幕较窄时显示最近几张；旧文件仍在收件夹。\n\nSnapline " + Updates.CurrentVersion + " · Windows 非官方移植版\n基于 Alejandro Buján 的 Tendedero 交互与 MIT 代码。", "Snapline · 使用说明", MessageBoxButton.OK, MessageBoxImage.Information); }
             finally { Busy = DialogOpen; }
         }
 
