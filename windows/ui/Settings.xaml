@@ -6,8 +6,10 @@
     <SolidColorBrush x:Key="Line" Color="#2236494D" />
     <SolidColorBrush x:Key="Tint" Color="#57F4FAF6" />
     <SolidColorBrush x:Key="Accent" Color="#294F68" />
+    <SolidColorBrush x:Key="NavInk" Color="#415257" />
+    <SolidColorBrush x:Key="MetalInk" Color="#202B2D" />
     <Style TargetType="Button">
-      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+      <Setter Property="Foreground" Value="{DynamicResource MetalInk}" />
       <Setter Property="FontFamily" Value="Microsoft YaHei UI" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="Cursor" Value="Hand" />
@@ -17,7 +19,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Grid>
+            <Grid Background="Transparent">
               <Grid x:Name="MetalLayer" IsHitTestVisible="False" />
               <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Grid>
@@ -30,22 +32,23 @@
     </Style>
     <Style x:Key="Bare" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}" />
     <Style TargetType="RadioButton">
-      <Setter Property="Foreground" Value="#415257" />
+      <Setter Property="Foreground" Value="{DynamicResource NavInk}" />
       <Setter Property="FontFamily" Value="Microsoft YaHei UI" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-      <Setter Property="Height" Value="41" />
-      <Setter Property="Margin" Value="0,3,0,4" />
+      <Setter Property="Height" Value="46" />
+      <Setter Property="Margin" Value="0,3,0,3" />
       <Setter Property="Padding" Value="13,0" />
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="RadioButton">
-            <Grid>
+            <Grid Background="Transparent">
               <Grid x:Name="MetalLayer" IsHitTestVisible="False" />
               <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
             </Grid>
             <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#192B31" /></Trigger>
               <Trigger Property="IsChecked" Value="True"><Setter Property="Foreground" Value="#192B31" /><Setter Property="FontWeight" Value="SemiBold" /></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -53,17 +56,17 @@
       </Setter>
     </Style>
     <Style x:Key="Toggle" TargetType="CheckBox">
-      <Setter Property="Width" Value="52" />
-      <Setter Property="Height" Value="29" />
+      <Setter Property="Width" Value="60" />
+      <Setter Property="Height" Value="34" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="CheckBox">
-            <Grid>
+            <Grid Background="Transparent">
               <Grid x:Name="MetalLayer" IsHitTestVisible="False" />
-              <Ellipse x:Name="Thumb" Width="21" Height="21" Margin="3,0" HorizontalAlignment="Left" Stroke="#90EEF5F6" StrokeThickness="1">
+              <Ellipse x:Name="Thumb" Width="26" Height="26" Margin="4,0" HorizontalAlignment="Left" Stroke="#90EEF5F6" StrokeThickness="1">
                 <Ellipse.Fill><RadialGradientBrush GradientOrigin=".27,.17"><GradientStop Color="White" Offset="0" /><GradientStop Color="#E1E9EB" Offset=".35" /><GradientStop Color="#AFBEC3" Offset=".69" /><GradientStop Color="#DCE5E7" Offset="1" /></RadialGradientBrush></Ellipse.Fill>
               </Ellipse>
             </Grid>

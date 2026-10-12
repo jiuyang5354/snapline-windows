@@ -8,6 +8,7 @@ $binaryRoot = Join-Path $projectRoot 'bin'
 New-Item -ItemType Directory -Force -Path $binaryRoot | Out-Null
 $iconPath = Join-Path $projectRoot 'Snapline.ico'
 if (-not (Test-Path -LiteralPath $iconPath)) { & (Join-Path $projectRoot 'make-icon.ps1') }
+& (Join-Path $projectRoot 'compile-shader.ps1')
 $references = @('System.dll', 'System.Core.dll', 'System.Net.Http.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Runtime.Serialization.dll', 'System.Xaml.dll', 'Microsoft.VisualBasic.dll') |
     ForEach-Object { '/reference:' + (Join-Path $frameworkRoot $_) }
 $references += @('WindowsBase.dll', 'PresentationCore.dll', 'PresentationFramework.dll') |
@@ -19,6 +20,7 @@ foreach ($name in @('Theme', 'Settings')) {
     $common += '/resource:' + (Join-Path $projectRoot ('ui\' + $name + '.xaml')) + ',Snapline.' + $name + '.xaml'
 }
 $common += '/resource:' + (Join-Path $projectRoot 'ANNOUNCEMENT.zh-CN.txt') + ',Snapline.Announcement'
+$common += '/resource:' + (Join-Path $projectRoot 'ui\SettingsGlass.ps') + ',Snapline.SettingsGlass.ps'
 & $compilerPath @common '/target:winexe' ('/out:' + (Join-Path $binaryRoot 'Snapline.exe')) @sourcePaths
 if ($LASTEXITCODE -ne 0) { throw 'Snapline compilation failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'Snapline.exe.config') -Destination $binaryRoot
@@ -31,7 +33,7 @@ if ($Test -or $Features -or $Editor -or $Announcements -or $Bindings -or $Materi
     & $compilerPath @common '/target:exe' '/main:Snapline.Tests' ('/out:' + (Join-Path $binaryRoot 'Snapline.Tests.exe')) @sourcePaths (Join-Path $projectRoot 'qa\Tests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Snapline.exe.config') -Destination (Join-Path $binaryRoot 'Snapline.Tests.exe.config')
-    if ($Materials) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --materials (Join-Path $projectRoot 'qa\output\materials-v1.4.4') }
+    if ($Materials) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --materials (Join-Path $projectRoot ('qa\output\materials-v' + [Reflection.AssemblyName]::GetAssemblyName((Join-Path $binaryRoot 'Snapline.exe')).Version.ToString(3))) }
     elseif ($Bindings) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --bindings (Join-Path $projectRoot 'qa\output') }
     elseif ($Editor) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --editor (Join-Path $projectRoot 'qa\output\editor-v1.4.1') }
     elseif ($Announcements) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --announcements (Join-Path $projectRoot 'qa\output') }

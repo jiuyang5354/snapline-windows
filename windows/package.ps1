@@ -16,7 +16,7 @@ foreach ($name in $releaseFiles) {
 }
 Copy-Item -LiteralPath (Join-Path (Split-Path $projectRoot -Parent) 'docs\preview.png') -Destination (Join-Path $portableRoot 'preview.png')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'QA.md') -Destination (Join-Path $portableRoot 'QA.md')
-$sourceFiles = @('.gitignore', 'build.ps1', 'package.ps1', 'make-icon.ps1', 'app.manifest', 'Snapline.exe.config', 'Snapline.ico', 'README.zh-CN.md', 'QA.md', 'ANNOUNCEMENT.zh-CN.txt')
+$sourceFiles = @('.gitignore', 'build.ps1', 'compile-shader.ps1', 'package.ps1', 'make-icon.ps1', 'app.manifest', 'Snapline.exe.config', 'Snapline.ico', 'README.zh-CN.md', 'QA.md', 'ANNOUNCEMENT.zh-CN.txt')
 foreach ($name in $sourceFiles) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination (Join-Path $sourceRoot ('windows\' + $name))
 }
@@ -25,7 +25,7 @@ Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Filter '*.cs' | ForEa
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\src')
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\Tests.cs') -Destination (Join-Path $sourceRoot 'windows\qa\Tests.cs')
-Get-ChildItem -LiteralPath (Join-Path $projectRoot 'ui') -Filter '*.xaml' | ForEach-Object {
+Get-ChildItem -LiteralPath (Join-Path $projectRoot 'ui') -File | Where-Object { $_.Extension -in @('.xaml','.hlsl','.ps') } | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\ui')
 }
 foreach ($repositoryFile in @('README.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md', 'CHANGELOG.md')) {

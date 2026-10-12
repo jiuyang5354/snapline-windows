@@ -48,6 +48,17 @@ namespace Snapline
         [STAThread]
         private static int Main(string[] args)
         {
+            if (args.Length == 2 && args[0] == "--settings") return CheckSettingsOnly(Path.GetFullPath(args[1]));
+            if (args.Length == 2 && args[0] == "--announcement-content") {
+                string announcementOutput = Path.GetFullPath(args[1]); Directory.CreateDirectory(announcementOutput);
+                var announcementApp = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                try {
+                    CheckAnnouncements(announcementOutput, announcementOutput, false);
+                    File.WriteAllLines(Path.Combine(announcementOutput, "announcement-content-results.txt"), checks);
+                    Console.WriteLine("PASS " + checks.Count + " announcement checks without keyboard input."); return 0;
+                } catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+                finally { announcementApp.Shutdown(); }
+            }
             if (args.Length == 2 && args[0] == "--materials") return CheckSettingsMaterials(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--network") return CheckNetwork(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--editor") return CheckPaint(Path.GetFullPath(args[1]));
@@ -524,7 +535,7 @@ namespace Snapline
             if (!shown) throw new Exception("The announcement action did not show its real window.");
         }
 
-        private static void CheckAnnouncements(string root, string output)
+        private static void CheckAnnouncements(string root, string output, bool keyboard = true)
         {
             string data = Path.Combine(root, "announcements");
             var original = new ImageStore(data);
@@ -544,6 +555,8 @@ namespace Snapline
                 AnnouncementAction(delegate { controller.ShowAnnouncement(true); }, delegate(AnnouncementWindow dialog) {
                     Check(dialog.Notes.IsReadOnly && dialog.Notes.Text.Contains("更新公告") && dialog.Notes.Text.Contains("Alejandro Buján"),
                         "The real announcement displays bundled readable release notes and upstream attribution offline");
+                    Check(dialog.Notes.Text.Contains("显卡采样坐标") && dialog.Notes.Text.Contains("后台线程") && dialog.Notes.Text.Contains("整个按钮区域"),
+                        "Bundled notes include the current drag, asynchronous metal and full-button input fixes");
                     Check(controller.Busy && !controller.Line.Revealed, "An open announcement suspends shelf input and keeps the shelf hidden");
                     controller.ShowAnnouncement();
                     Check(Application.Current.Windows.OfType<AnnouncementWindow>().Count(window => window.IsVisible) == 1,
@@ -576,6 +589,7 @@ namespace Snapline
                 AnnouncementAction(delegate { tray.ContextMenuStrip.Items.OfType<Forms.ToolStripMenuItem>().Single(item => item.Text == "更新公告…").PerformClick(); },
                     delegate(AnnouncementWindow dialog) {
                         Check(!AnnouncementWindow.Due(controller.Store.Settings), "The real tray command reopens an already-read announcement");
+                        if (!keyboard) { dialog.Dismiss.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return; }
                         IntPtr handle = new WindowInteropHelper(dialog).Handle; SetForegroundWindow(handle); dialog.Notes.Focus(); Pump(80);
                         if (Native.GetForegroundWindow() != handle) throw new Exception("Escape probe did not target its own announcement window.");
                         TypeKey(0x1b);
@@ -586,6 +600,7 @@ namespace Snapline
                     AnnouncementAction(delegate { settings.Part<Button>("ViewAnnouncement").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); },
                         delegate(AnnouncementWindow dialog) {
                             Check(dialog.Owner == settings, "The real About button opens the announcement over its settings owner");
+                            if (!keyboard) { dialog.Dismiss.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return; }
                             IntPtr handle = new WindowInteropHelper(dialog).Handle; SetForegroundWindow(handle); dialog.Notes.Focus(); Pump(80);
                             if (Native.GetForegroundWindow() != handle) throw new Exception("Enter probe did not target its own announcement window.");
                             TypeKey(0x0d);
@@ -1368,12 +1383,18 @@ namespace Snapline
                 int center = ((glassImage.PixelHeight / 2) * glassImage.PixelWidth + glassImage.PixelWidth / 2) * 4;
                 Check(glassPixels[center + 3] == 255 && glassPixels[3] == 0, "Glass paints the full backdrop center and preserves transparent rounded corners");
                 Check(glassPixels[center] < 240 && glassPixels[center + 2] < 240, "The glass center retains landscape color instead of turning into a white rectangle");
-                var backdropLayer = Descendants(dialog.Glass).OfType<Image>().First(image => image.Source != null);
-                string beforeMove = ImageStore.Digest((BitmapSource)backdropLayer.Source);
+                Point beforeMove = dialog.Glass.SampleOrigin;
+                int mapBuilds = dialog.Glass.MapBuilds;
                 var zeroAlpha = new GlassBackdrop(BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 44, 55, 66, 0 }, 4), 1).Sample(new Rect(0, 0, 1, 1));
                 var zeroPixels = new byte[4]; zeroAlpha.CopyPixels(zeroPixels, 4, 0);
                 Check(zeroPixels.SequenceEqual(new byte[] { 44, 55, 66, 255 }), "Desktop sampling repairs zero-alpha screen pixels without changing their color");
                 Check(dialog.Materials.Count == 22 && dialog.Materials.Where(m => m.IsVisible).All(m => m.Frames > 0), "Native metal textures render on all visible controls");
+                foreach (string name in new[] { "NavCapture", "CollectToggle", "CancelSettings", "SaveSettings" }) {
+                    var control = dialog.Part<Control>(name);
+                    Check(control.InputHitTest(new Point(4, control.ActualHeight / 2)) != null &&
+                        control.InputHitTest(new Point(control.ActualWidth - 4, control.ActualHeight / 2)) != null,
+                        name + " accepts pointer input at both capsule ends, outside its text or thumb");
+                }
                 foreach (string page in new[] { "General", "Capture", "Keys", "Storage", "About" }) {
                     dialog.ShowPage(page); dialog.UpdateLayout(); Pump(100);
                     var bounds = dialog.Part<Grid>("Pages");
@@ -1387,14 +1408,57 @@ namespace Snapline
                 var surface = dialog.Materials.First(m => m.ActualWidth > 100 && m.ActualHeight > 35);
                 var textures = LiquidMetal.Render(140, 41, 3.5, new Point(70, 20.5), false, false, -1);
                 var pixels = new byte[textures[0].PixelWidth * textures[0].PixelHeight * 4]; textures[0].CopyPixels(pixels, textures[0].PixelWidth * 4, 0);
-                Check(pixels[3] == 0 && pixels[((textures[0].PixelHeight / 2) * textures[0].PixelWidth + textures[0].PixelWidth / 2) * 4 + 3] == 255,
-                    "Metal preserves transparent exterior padding and an opaque readable center");
+                Check(pixels[3] < 24 && pixels[((textures[0].PixelHeight / 2) * textures[0].PixelWidth + textures[0].PixelWidth / 2) * 4 + 3] == 255,
+                    "Metal keeps exterior padding translucent and its readable center opaque");
                 Check(Enumerable.Range(0, pixels.Length / 4).All(i => pixels[i * 4] <= pixels[i * 4 + 3] && pixels[i * 4 + 1] <= pixels[i * 4 + 3] && pixels[i * 4 + 2] <= pixels[i * 4 + 3]),
                     "Native metal pixels use valid premultiplied alpha");
                 var hovered = LiquidMetal.Render(140, 41, 4.1, new Point(100, 16), true, false, .2);
                 Check(ImageStore.Digest(textures[0]) != ImageStore.Digest(hovered[0]) && ImageStore.Digest(textures[1]) != ImageStore.Digest(hovered[1]), "Hover and ripple change the native metal body and crisp rim pixels");
                 var glowPixels = new byte[textures[2].PixelWidth * textures[2].PixelHeight * 4]; textures[2].CopyPixels(glowPixels, textures[2].PixelWidth * 4, 0);
-                Check(Enumerable.Range(0, glowPixels.Length / 4).Any(i => pixels[i * 4 + 3] == 0 && glowPixels[i * 4 + 3] > 0), "The metal bloom has visible pixels outside the capsule body");
+                int haloPixel = (8 * textures[0].PixelWidth + textures[0].PixelWidth / 2) * 4;
+                Check(glowPixels[haloPixel + 3] > 0 && pixels[haloPixel + 3] > 0 && pixels[haloPixel + 3] < 255,
+                    "The composited metal halo stays visible four pixels outside the capsule without becoming an opaque border");
+                foreach (string background in new[] { "light", "dark", "text" }) {
+                    var fixture = new DrawingVisual();
+                    using (var dc = fixture.RenderOpen()) {
+                        double w = screen.Bounds.Width / scale, h = screen.Bounds.Height / scale;
+                        bool light = background == "light";
+                        dc.DrawRectangle(new SolidColorBrush(light ? Color.FromRgb(232, 237, 240) : Color.FromRgb(30, 34, 38)), null, new Rect(0, 0, w, h));
+                        if (background == "text") {
+                            for (int y = 0; y < h; y += 38) dc.DrawText(new FormattedText("BACKGROUND TEXT · 0123456789 · SNAPLINE SETTINGS", System.Globalization.CultureInfo.InvariantCulture,
+                                FlowDirection.LeftToRight, new Typeface("Segoe UI"), 18, Brushes.White, scale), new Point(60, y));
+                            // Eight-pixel stems reproduce the fine high-contrast
+                            // details behind the settings window in the report.
+                            for (int x = 0; x < w; x += 16) dc.DrawRectangle(Brushes.White, null, new Rect(x, 0, 8, h));
+                        } else {
+                            dc.DrawGeometry(new SolidColorBrush(light ? Color.FromRgb(148, 182, 186) : Color.FromRgb(41, 91, 94)), null,
+                                Geometry.Parse("M0,450 L420,160 L900,480 L1600,180 L1600,1000 L0,1000 Z"));
+                        }
+                    }
+                    var image = new RenderTargetBitmap(screen.Bounds.Width, screen.Bounds.Height, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+                    image.Render(fixture); image.Freeze();
+                    dialog.Glass.SetBackdrop(new GlassBackdrop(image, scale), new Rect(screen.Bounds.Left / scale, screen.Bounds.Top / scale, screen.Bounds.Width / scale, screen.Bounds.Height / scale));
+                    Pump(100);
+                    SaveSettingsRender(dialog, Path.Combine(output, "native-settings-" + background + "-background.png"));
+                    if (background == "text") {
+                        var rendered = new RenderTargetBitmap((int)Math.Ceiling(dialog.Glass.ActualWidth), (int)Math.Ceiling(dialog.Glass.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                        rendered.Render(dialog.Glass);
+                        var detail = new byte[rendered.PixelWidth * rendered.PixelHeight * 4]; rendered.CopyPixels(detail, rendered.PixelWidth * 4, 0);
+                        int row = rendered.PixelHeight / 2, min = 255, max = 0;
+                        for (int x = rendered.PixelWidth / 2 - 32; x < rendered.PixelWidth / 2 + 32; x++) { int value = detail[(row * rendered.PixelWidth + x) * 4 + 1]; min = Math.Min(min, value); max = Math.Max(max, value); }
+                        Check(max - min < 12, "Frosted glass suppresses fine high-contrast background detail below twelve color levels");
+                        Check(detail[(row * rendered.PixelWidth + 28) * 4 + 3] == 255,
+                            "Clipping after blur preserves opaque glass beside the bevel instead of a translucent haze");
+                    }
+                }
+                dialog.Glass.SetBackdrop(new GlassBackdrop(backdrop, scale), new Rect(screen.Bounds.Left / scale, screen.Bounds.Top / scale, screen.Bounds.Width / scale, screen.Bounds.Height / scale));
+                beforeMove = dialog.Glass.SampleOrigin; mapBuilds = dialog.Glass.MapBuilds;
+                var performance = Stopwatch.StartNew();
+                for (int n = 0; n < 10; n++) LiquidMetal.Render(140, 41, 4 + n / 30.0, new Point(100, 16), true, false, .2 + n / 30.0);
+                performance.Stop();
+                Console.WriteLine("Metal 140x41 render: " + (performance.Elapsed.TotalMilliseconds / 10).ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + " ms/frame");
+                File.WriteAllBytes(Path.Combine(output, "metal-idle.png"), ImageStore.Png(textures[0]));
+                File.WriteAllBytes(Path.Combine(output, "metal-hover.png"), ImageStore.Png(hovered[0]));
                 var nav = dialog.Part<RadioButton>("NavGeneral");
                 dialog.Activate(); nav.Focus(); dialog.SetInputMode(true); Pump(100);
                 Check(dialog.Materials.Any(m => m.FocusVisible), "Keyboard interaction shows a native focus outline");
@@ -1405,9 +1469,16 @@ namespace Snapline
                 Check(!dialog.Materials.Any(m => m.Animating), "Native material animation stops after keyboard focus returns to pointer input");
                 int frames = dialog.Materials.Sum(m => m.Frames); Pump(350);
                 Check(frames == dialog.Materials.Sum(m => m.Frames), "Idle settings do not continuously regenerate metal textures");
+                var dragClock = Stopwatch.StartNew();
+                double startLeft = dialog.Left;
+                for (int n = 0; n < 80; n++) { dialog.Left = startLeft + n % 20; dialog.Glass.Update(); }
+                dragClock.Stop();
+                Console.WriteLine("Glass move update: " + (dragClock.Elapsed.TotalMilliseconds / 80).ToString("F3", CultureInfo.InvariantCulture) + " ms/update");
+                Check(dragClock.Elapsed.TotalMilliseconds / 80 < 4 && dialog.Glass.MapBuilds == mapBuilds,
+                    "Repeated moves stay below four milliseconds per CPU update and reuse the same optical map");
                 dialog.Left += 24; dialog.Glass.Update(); Pump(100);
                 SaveSettingsRender(dialog, Path.Combine(output, "native-settings-moved.png"));
-                Check(beforeMove != ImageStore.Digest((BitmapSource)backdropLayer.Source), "Moving settings changes the sampled backdrop pixels");
+                Check(beforeMove != dialog.Glass.SampleOrigin && dialog.Glass.MapBuilds == mapBuilds, "Moving settings changes background coordinates without rebuilding optical pixels");
                 Console.WriteLine("PASS " + checks.Count + " native material checks.");
                 File.WriteAllLines(Path.Combine(output, "material-results.txt"), checks);
                 return 0;
@@ -1455,7 +1526,29 @@ namespace Snapline
             }
         }
 
-        private static void CheckSettings(Controller controller, string output)
+        private static int CheckSettingsOnly(string output)
+        {
+            Directory.CreateDirectory(output);
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            Controller controller = null;
+            try {
+                string root = Path.Combine(output, "settings-run-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+                var store = new ImageStore(root);
+                store.Settings.ListenClipboard = false; store.Settings.CollectionPaused = true; store.Settings.AutoCheckUpdates = false;
+                store.Settings.HotkeyKey = FreeHotkey(7); store.Settings.HotkeyModifiers = 7;
+                store.Settings.CaptureHotkeyKey = FreeHotkey(6); store.Settings.CaptureHotkeyModifiers = 6; store.Save();
+                controller = new Controller(root, false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
+                controller.Busy = true;
+                controller.Line.Reveal(Forms.Screen.FromPoint(Native.Cursor())); Pump(80); controller.Line.Hide();
+                CheckSettings(controller, output, false);
+                File.WriteAllLines(Path.Combine(output, "settings-results.txt"), checks);
+                Console.WriteLine("PASS " + checks.Count + " settings checks without keyboard, mouse or clipboard input."); return 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+            finally { if (controller != null) controller.Dispose(); app.Shutdown(); }
+        }
+
+        private static void CheckSettings(Controller controller, string output, bool checkToolbar = true)
         {
             bool originalClipboard = controller.Store.Settings.ListenClipboard, originalPaused = controller.Store.Settings.CollectionPaused;
             bool originalAutomatic = controller.Store.Settings.AutoCheckUpdates;
@@ -1512,6 +1605,7 @@ namespace Snapline
                 "Settings can save normally after a write failure");
             using (var run = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
                 Check((run == null ? null : run.GetValue("Snapline") as string) == runValue, "Opening, canceling and saving preferences leaves real startup entry untouched");
+            if (!checkToolbar) return;
             controller.Line.Reveal(Forms.Screen.FromPoint(Native.Cursor())); Pump(400);
             var latest = controller.Store.Items.Last();
             controller.Line.LatestButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

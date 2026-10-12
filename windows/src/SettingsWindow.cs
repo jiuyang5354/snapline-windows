@@ -19,6 +19,7 @@ namespace Snapline
         private string keyError, captureError;
         private string folder;
         private bool startup;
+        private bool feedbackError;
         internal bool KeyboardMode { get; private set; }
         internal readonly List<LiquidMetal> Materials = new List<LiquidMetal>();
         internal readonly SettingsGlass Glass = new SettingsGlass();
@@ -46,6 +47,15 @@ namespace Snapline
             Part<Grid>("SettingsTitlebar").MouseLeftButtonDown += delegate { DragMove(); };
             var root = (Grid)View.Child;
             Grid.SetRowSpan(Glass, 3); root.Children.Insert(0, Glass);
+            Glass.PaletteChanged += delegate(bool dark) {
+                View.Resources["Ink"] = SystemParameters.HighContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(dark ? Color.FromRgb(242, 248, 250) : Color.FromRgb(32, 43, 45));
+                View.Resources["Muted"] = SystemParameters.HighContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(dark ? Color.FromRgb(210, 224, 230) : Color.FromRgb(53, 70, 74));
+                View.Resources["NavInk"] = View.Resources["Muted"];
+                View.Resources["MetalInk"] = SystemParameters.HighContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(Color.FromRgb(32, 43, 45));
+                View.Resources["Line"] = new SolidColorBrush(dark ? Color.FromArgb(45, 235, 245, 250) : Color.FromArgb(34, 54, 73, 77));
+                View.Resources["Tint"] = new SolidColorBrush(dark ? Color.FromArgb(32, 235, 245, 250) : Color.FromArgb(87, 244, 250, 246));
+                Part<TextBlock>("SettingsFeedback").Foreground = Brush(feedbackError ? "Accent" : "Muted");
+            };
             SourceInitialized += delegate {
                 var screen = Forms.Screen.FromHandle(new WindowInteropHelper(this).Handle);
                 double scale = Native.Scale(screen);
@@ -111,7 +121,7 @@ namespace Snapline
         private Brush Brush(string name) { return (Brush)View.FindResource(name); }
         private void Click(string name, Action action) { Part<Button>(name).Click += delegate { action(); }; }
         private void Feedback(string text, bool error)
-        { Part<TextBlock>("SettingsFeedback").Text = text; Part<TextBlock>("SettingsFeedback").ToolTip = text; Part<TextBlock>("SettingsFeedback").Foreground = Brush(error ? "Accent" : "Muted"); }
+        { feedbackError = error; Part<TextBlock>("SettingsFeedback").Text = text; Part<TextBlock>("SettingsFeedback").ToolTip = text; Part<TextBlock>("SettingsFeedback").Foreground = Brush(error ? "Accent" : "Muted"); }
 
         internal void ShowPage(string page)
         {

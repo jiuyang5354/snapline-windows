@@ -18,6 +18,7 @@ namespace Snapline
         private readonly byte[] pixels;
         private readonly int width, height;
         internal readonly double Scale;
+        internal readonly BitmapSource Snapshot;
 
         internal GlassBackdrop(BitmapSource image, double scale)
         {
@@ -25,6 +26,9 @@ namespace Snapline
             width = converted.PixelWidth; height = converted.PixelHeight; Scale = scale;
             pixels = new byte[width * height * 4];
             converted.CopyPixels(pixels, width * 4, 0);
+            for (int i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
+            Snapshot = BitmapSource.Create(width, height, 96 * scale, 96 * scale, PixelFormats.Bgra32, null, pixels, width * 4);
+            Snapshot.Freeze();
         }
 
         internal static bool Enabled
@@ -56,6 +60,18 @@ namespace Snapline
                 }
             }
             catch (Win32Exception) { return null; }
+        }
+
+        // Prepare the diffusion once per opening, rather than blurring and
+        // copying a window-sized bitmap on every LocationChanged event.
+        internal BitmapSource Frosted(double radius)
+        {
+            var image = new Image { Source = Snapshot, Stretch = Stretch.Fill,
+                Effect = new System.Windows.Media.Effects.BlurEffect { Radius = radius, KernelType = System.Windows.Media.Effects.KernelType.Gaussian } };
+            var size = new Size(width / Scale, height / Scale);
+            image.Measure(size); image.Arrange(new Rect(size));
+            var result = new RenderTargetBitmap(width, height, 96 * Scale, 96 * Scale, PixelFormats.Pbgra32);
+            result.Render(image); result.Freeze(); return result;
         }
 
         internal BitmapSource Bevel(Rect area, double radius)
