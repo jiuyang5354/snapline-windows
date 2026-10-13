@@ -1,23 +1,23 @@
 [
   {
-    "tag_name": "v1.4.6",
+    "tag_name": "v1.4.7",
     "draft": false,
     "prerelease": true,
-    "body": "Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 移植版。原作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**；Windows 实现由 **jiuyang5354** 发布。使用独立名称与图标，不代表原作者背书。原作者声明及 MIT 许可随包保留。\n\n- 设置玻璃改用原生 WPF 像素着色器处理边缘折射与方向高光，背景扩散和光学贴图预先准备，移动时复用贴图并更新采样坐标。\n- 液态金属像素计算移到后台线程，保留亮边、外侧泛光和点击波纹；空闲时停止动画。玻璃更加通透，深色背景自动采用浅色内容文字。\n- 导航和开关增大，按钮两端与整块区域可点击，使用 Windows 原生开关和选择行为；保留鼠标与键盘各自的焦点提示。\n- 软件内更新公告同步写入本次调整、已知限制、覆盖安装说明及原作者信息。首次运行 v1.4.6 显示一次，托盘和“设置 → 关于”可随时重看，离线可用。\n- 保留原有自定义显示 / 隐藏与区域截图快捷键、悬停 C / A / D / Delete、画图编辑、鼠标指针选项、暂停收集及开机启动开关。\n\n**已知限制：** 设置窗口拖动卡顿仍有反馈；背景使用打开窗口前的内存快照，背景中的视频和其他窗口变化不会实时刷新。“内存不足后退出”的反馈尚未复现或确认修复，本版不宣称解决这两项问题。关闭系统透明效果或启用高对比度时回退实色，关闭系统界面动画时使用静态材质。\n\n发布前重新编译，快捷键注册 **14/14**、公告 **15/15**、设置保存/取消 **16/16**、材质与点击命中 **25/25** 共 **70 项通过**；安装器 **74/74 通过**，覆盖原目录升级、退出旧实例、截图和设置保留、快捷方式保留及卸载边界。本轮未重跑需要接管键鼠和剪贴板的完整 233 项回归，也未完成低内存或不同显卡机器的覆盖验证。具体验证范围见随包 `QA.md`。\n\n提供 `Snapline-Windows-Setup-v1.4.6.exe` 安装包、`Snapline-Windows-v1.4.6.zip` 便携包及对应源码包、SHA-256 校验文件。安装版运行 EXE 在原目录覆盖，保留截图、设置、已有快捷方式与开机启动状态；便携版先退出旧版再完整解压。GitHub Packages 对应版本为 `1.4.6-preview`。\n\n本版为 **Windows 预发布版**，目前未作代码签名。Windows 10 / 11 需要 .NET Framework 4.8 或更高版本。程序不上传截图或剪贴板内容。\n",
+    "body": "Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 移植版。原作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**；Windows 实现由 **jiuyang5354** 发布。使用独立名称与图标，不代表原作者背书；原作者声明与 MIT 许可随包保留。\n\n本版降低历史图片恢复和去重时的内存开销，针对已复现的大图缓冲区申请失败。\n\n- **分块计算图片校验**：依次复制少量像素并计算 SHA-256，避免额外申请整张图的 BGRA32 数组。图片内容、去重结果、现有截图和设置保留。\n- **受限内存回归 8/8 通过**：在 192 MiB 独立子进程上限下，旧版恢复生成的 8K 图片时可重复在 `ImageStore.Digest` 抛出 `OutOfMemoryException`；新版在相同上限下恢复成功。普通、透明和 8K 图片的校验结果与旧版一致，重复内容仍可正确去重，重复文件保留。\n- **实测峰值降低**：同一生成的 8K 图片读取与校验峰值约 152.05 MiB；此前旧算法在 320 MiB 上限下成功时约 278.61 MiB。这是特定子进程和生成图片的本机测量，不是整个软件在所有设备上的内存保证。\n- **更新公告同步**：首次运行新版显示本次内存改动、验证边界和原作者说明；托盘与“设置 → 关于”可重看，离线可用。\n- 保留毛玻璃设置、液态金属按钮、自定义显示/区域截图键、画图编辑修复、悬停 C / A / D / Delete 与鼠标指针选项。\n\n验证结果：图片内存专项 **8/8**；快捷键注册 14、公告 16、设置保存/取消 16、材质与命中 25，共 **71 项通过**；安装器 **74/74**。安装器使用私有 QA 目录和登记，验证覆盖安装、原数据与快捷方式保留、桌面图标选项及卸载。本轮没有重跑会操作键鼠和剪贴板的完整 233 项回归；其记录仍为此前验证。\n\n**使用与验证边界**\n\n- 反馈用户确认双击后立即报错，但尚未取得对方版本、运行环境、历史图片或异常栈。已修复受控测试中复现的缓冲区申请失败，对方的实际“内存不足”启动报错仍需在对方电脑上确认；不能保证所有此类报错都解决。\n- 原图解码仍需内存。设置拖动卡顿仍有反馈；设置背景使用打开前的内存快照，背后视频或窗口内容变化不会实时刷新。\n- **安装版**下载 `Snapline-Windows-Setup-v1.4.7.exe` 并运行覆盖安装，沿用原目录，保留截图、设置、已有快捷方式及开机启动状态。首次安装默认创建桌面图标，可以取消。开机启动默认关闭。\n- **便携版**下载 `Snapline-Windows-v1.4.7.zip`，先退出旧版，再解压整个包。旧程序已经无法启动时，请直接下载新版 EXE 或 ZIP；程序内更新提示需要程序能够运行。\n- Windows 10 / 11，需要 .NET Framework 4.8 或更高；仍为预发布版，未做代码签名。本机验证不代表独立 Windows 10、32 位或反馈用户设备的现场覆盖。\n\n附件包含 EXE、便携 ZIP、程序源码、安装器源码及各自 SHA-256 文件。程序源码包含生成的测试图片和 `StartupMemoryProbe.cs`，可用 `windows/build.ps1 -Storage` 复现图片内存专项；详细验证范围见随包 `QA.md`。\n\nGitHub Packages 对应 NuGet 版本为 `1.4.7-preview`，发布后由工作流下载并核对全部便携文件。\n",
     "assets": [
       {
-        "name": "Snapline-Windows-v1.4.6.zip",
+        "name": "Snapline-Windows-v1.4.7.zip",
         "state": "uploaded",
-        "size": 177710,
-        "digest": "sha256:055e399799185d7c76dc76a277a9457c368bf21836b39e292e59c908f92208b8",
-        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.6/Snapline-Windows-v1.4.6.zip"
+        "size": 179466,
+        "digest": "sha256:266241715489b22b161b24c8d96a7c89b8aa15b963119e1fc173bfba007fe3ba",
+        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-v1.4.7.zip"
       },
       {
-        "name": "Snapline-Windows-Setup-v1.4.6.exe",
+        "name": "Snapline-Windows-Setup-v1.4.7.exe",
         "state": "uploaded",
-        "size": 259116,
-        "digest": "sha256:05cd19c8527cd0ce2042357a183f8286c0cc1c16e056712cb64c9788436d92c4",
-        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.6/Snapline-Windows-Setup-v1.4.6.exe"
+        "size": 260875,
+        "digest": "sha256:3c3dca16ab1beaa21223e3a1902b782e8b56439361936c0b9049aaca94b0bf41",
+        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-Setup-v1.4.7.exe"
       }
     ]
   }
