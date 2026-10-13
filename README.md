@@ -4,7 +4,7 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的**非�
 
 An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# / WPF and Win32. This project uses its own name and icon and is not endorsed by the upstream author.
 
-**v1.4.6 调整设置玻璃与交互。** 玻璃使用原生像素着色器处理边缘折射，拖动时只更新背景坐标；金属像素在后台线程计算，保留亮边与泛光。导航和开关增大，整个按钮区域可点击；深色背景自动采用浅色文字。本版为 Windows 预发布版，设置拖动卡顿仍有反馈，“内存不足后退出”尚未复现或确认修复。实际验证范围见 [验证记录](windows/QA.md)。
+**v1.4.7 降低历史图片恢复和去重的内存开销。** 分块计算图片校验，避免额外申请整张图的像素数组；原像素、去重结果、截图和设置继续保留。受限内存下已复现并修复这项大图缓冲区申请失败，反馈用户的实际启动报错仍需在对方电脑上确认。本版为 Windows 预发布版，设置拖动卡顿与背景快照限制仍保留。实际验证范围见 [验证记录](windows/QA.md)。
 
 ![Snapline Windows 窗口预览](docs/preview.png)
 
@@ -16,15 +16,15 @@ v1.4.6 原生 WPF 设置窗口，包含常规、截图、快捷键、存储、�
 
 ## 下载和运行
 
-- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.6/Snapline-Windows-Setup-v1.4.6.exe)
-- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.6/Snapline-Windows-v1.4.6.zip)
-- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.6/Snapline-Windows-Source-v1.4.6.zip)
-- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.6/Snapline-Windows-Installer-Source-v1.4.6.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.6/SHA256SUMS-Setup.txt)
-- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.4.6)
+- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-Setup-v1.4.7.exe)
+- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-v1.4.7.zip)
+- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-Source-v1.4.7.zip)
+- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-Installer-Source-v1.4.7.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/SHA256SUMS-Setup.txt)
+- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.4.7)
 
 **安装版：** 双击 EXE，按中文向导安装。“创建桌面快捷方式”默认勾选，可取消；同时提供开始菜单入口和卸载入口。默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，只安装给当前用户，不需要管理员权限。开机启动默认关闭。卸载保留原来的截图和设置，完整说明见 [安装版指南](windows/INSTALLER.zh-CN.md)。
 
-另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，本版对应 NuGet 版本为 `1.4.6-preview`。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
+另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，本版对应 NuGet 版本为 `1.4.7-preview`。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
 
 目标系统为 **Windows 10 / 11，需 .NET Framework 4.8 或更高版本**。解压整个便携包，双击其中的 `Snapline.exe`。程序不需要管理员权限；运行后驻留系统托盘，图标也可能在“隐藏图标”菜单中。
 
@@ -104,6 +104,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\package.ps1
 ```
 
 测试会临时使用系统剪贴板，结束时恢复能读取的原格式；测试期间请暂停复制操作。测试图片与状态使用 `windows/qa/output/` 中的独立目录。
+
+仅检查历史图片恢复、去重结果和受限内存时，可运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\build.ps1 -Storage`。此专项使用生成的普通、透明和 8K 测试图片，给各独立子进程设置 192 MiB 内存上限，不读取用户数据或操作键鼠、剪贴板。
 
 维护发布时，`package.ps1` 根据 EXE 版本生成 ZIP、`SHA256SUMS.txt` 与 `windows/dist/update.json`；随后 `package-installer.ps1 -Test` 构建并验证安装器，将同版本 EXE 的大小、地址与 SHA-256 加入该版本文件。先上传并核对 EXE 和 ZIP 发布文件，再将版本文件复制至仓库根目录的 `update.json` 并推送，避免客户端提示尚未完成上传的版本。版本文件保留 ZIP 资产以兼容旧客户端，`prerelease` 应与 GitHub Release 的状态一致。
 

@@ -556,7 +556,9 @@ namespace Snapline
                     Check(dialog.Notes.IsReadOnly && dialog.Notes.Text.Contains("更新公告") && dialog.Notes.Text.Contains("Alejandro Buján"),
                         "The real announcement displays bundled readable release notes and upstream attribution offline");
                     Check(dialog.Notes.Text.Contains("显卡采样坐标") && dialog.Notes.Text.Contains("后台线程") && dialog.Notes.Text.Contains("整个按钮区域"),
-                        "Bundled notes include the current drag, asynchronous metal and full-button input fixes");
+                        "Bundled notes retain the recent drag, asynchronous metal and full-button input changes");
+                    Check(dialog.Notes.Text.Contains("分块计算校验") && dialog.Notes.Text.Contains("原去重结果") && dialog.Notes.Text.Contains("仍需实际确认"),
+                        "Bundled notes describe the memory fix, digest compatibility and unconfirmed customer environment");
                     Check(controller.Busy && !controller.Line.Revealed, "An open announcement suspends shelf input and keeps the shelf hidden");
                     controller.ShowAnnouncement();
                     Check(Application.Current.Windows.OfType<AnnouncementWindow>().Count(window => window.IsVisible) == 1,

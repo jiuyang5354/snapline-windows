@@ -1,4 +1,4 @@
-param([switch]$Test, [switch]$Features, [switch]$Editor, [switch]$Announcements, [switch]$Bindings, [switch]$Materials)
+param([switch]$Test, [switch]$Features, [switch]$Editor, [switch]$Announcements, [switch]$Bindings, [switch]$Materials, [switch]$Storage)
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $frameworkRoot = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319'
@@ -29,6 +29,15 @@ foreach ($licenseFile in @('LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md')) {
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.zh-CN.md') -Destination (Join-Path $binaryRoot 'README.zh-CN.md')
 Write-Output ('Built: ' + (Join-Path $binaryRoot 'Snapline.exe'))
+if ($Storage) {
+    $probe = Join-Path $binaryRoot 'StartupMemoryProbe.exe'
+    & $compilerPath '/nologo' '/optimize+' '/platform:anycpu' '/langversion:5' '/warn:4' '/utf8output' '/target:exe' ('/out:' + $probe) (Join-Path $projectRoot 'qa\StartupMemoryProbe.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Startup memory probe compilation failed.' }
+    $storageOutput = Join-Path $projectRoot ('qa\output\startup-memory-v' + [Reflection.AssemblyName]::GetAssemblyName((Join-Path $binaryRoot 'Snapline.exe')).Version.ToString(3))
+    New-Item -ItemType Directory -Force -Path $storageOutput | Out-Null
+    & $probe (Join-Path $binaryRoot 'Snapline.exe') (Join-Path $projectRoot 'qa\fixtures\startup-memory') (Join-Path $storageOutput ('run-' + [Guid]::NewGuid().ToString('N'))) | Tee-Object -FilePath (Join-Path $storageOutput 'memory-results.txt')
+    if ($LASTEXITCODE -ne 0) { throw 'Startup memory regression failed.' }
+}
 if ($Test -or $Features -or $Editor -or $Announcements -or $Bindings -or $Materials) {
     & $compilerPath @common '/target:exe' '/main:Snapline.Tests' ('/out:' + (Join-Path $binaryRoot 'Snapline.Tests.exe')) @sourcePaths (Join-Path $projectRoot 'qa\Tests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }

@@ -25,6 +25,11 @@ Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Filter '*.cs' | ForEa
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\src')
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\Tests.cs') -Destination (Join-Path $sourceRoot 'windows\qa\Tests.cs')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\StartupMemoryProbe.cs') -Destination (Join-Path $sourceRoot 'windows\qa\StartupMemoryProbe.cs')
+New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'windows\qa\fixtures\startup-memory') | Out-Null
+Get-ChildItem -LiteralPath (Join-Path $projectRoot 'qa\fixtures\startup-memory') -Filter '*.png' | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\qa\fixtures\startup-memory')
+}
 Get-ChildItem -LiteralPath (Join-Path $projectRoot 'ui') -File | Where-Object { $_.Extension -in @('.xaml','.hlsl','.ps') } | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\ui')
 }

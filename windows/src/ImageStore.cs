@@ -121,10 +121,19 @@ namespace Snapline
         {
             var converted = new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
             int stride = checked(converted.PixelWidth * 4);
-            var bytes = new byte[checked(stride * converted.PixelHeight)];
-            converted.CopyPixels(bytes, stride, 0);
+            int rows = Math.Min(converted.PixelHeight, Math.Max(1, 262144 / stride));
+            var bytes = new byte[checked(stride * rows)];
             using (var hash = SHA256.Create())
-                return image.PixelWidth + "x" + image.PixelHeight + ":" + Convert.ToBase64String(hash.ComputeHash(bytes));
+            {
+                for (int y = 0; y < converted.PixelHeight; y += rows)
+                {
+                    int count = Math.Min(rows, converted.PixelHeight - y);
+                    converted.CopyPixels(new System.Windows.Int32Rect(0, y, converted.PixelWidth, count), bytes, stride, 0);
+                    hash.TransformBlock(bytes, 0, checked(stride * count), bytes, 0);
+                }
+                hash.TransformFinalBlock(bytes, 0, 0);
+                return image.PixelWidth + "x" + image.PixelHeight + ":" + Convert.ToBase64String(hash.Hash);
+            }
         }
 
         internal Shot AddBitmap(BitmapSource image)
