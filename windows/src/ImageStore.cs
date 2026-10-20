@@ -15,6 +15,7 @@ namespace Snapline
     {
         [DataMember] public bool ListenClipboard = true;
         [DataMember] public string WatchFolder = Native.ScreenshotsFolder();
+        [DataMember] public string InboxFolder;
         [DataMember] public List<string> Paths = new List<string>();
         [DataMember] public uint HotkeyKey = Hotkey.DefaultKey;
         [DataMember] public uint HotkeyModifiers = Hotkey.DefaultModifiers;
@@ -51,7 +52,8 @@ namespace Snapline
         internal const int MaxItems = 12;
         internal readonly List<Shot> Items = new List<Shot>();
         internal readonly string Root;
-        internal readonly string Inbox;
+        internal readonly string DefaultInbox;
+        internal string Inbox { get; private set; }
         internal Settings Settings;
         internal event Action Changed;
         private readonly Random random = new Random();
@@ -60,7 +62,8 @@ namespace Snapline
         internal ImageStore(string root)
         {
             Root = System.IO.Path.GetFullPath(root);
-            Inbox = System.IO.Path.Combine(Root, "Inbox");
+            DefaultInbox = System.IO.Path.Combine(Root, "Inbox");
+            Inbox = DefaultInbox;
             stateFile = System.IO.Path.Combine(Root, "settings.json");
             Directory.CreateDirectory(Inbox);
             Settings = new Settings();
@@ -74,11 +77,19 @@ namespace Snapline
                 catch (IOException) { Settings = new Settings(); }
                 catch (SerializationException) { Settings = new Settings(); }
             }
+            string prepared, error;
+            if (!string.IsNullOrEmpty(Settings.InboxFolder) && TryPrepareInbox(Settings.InboxFolder, out prepared, out error)) Inbox = prepared;
             var paths = Settings.Paths ?? new List<string>();
+            StartupDiagnostics.RestoreTotal = paths.Count; StartupDiagnostics.RestoredCount = 0;
+            StartupDiagnostics.RestoreErrors = 0; StartupDiagnostics.RestoreError = null;
             foreach (var path in paths)
             {
-                try { AddFile(path, false); }
-                catch (Exception ex) { if (!IsImageError(ex)) throw; }
+                try { AddFile(path, false); StartupDiagnostics.RestoredCount = Items.Count; }
+                catch (Exception ex) {
+                    if (!IsImageError(ex)) throw;
+                    StartupDiagnostics.RestoreErrors++;
+                    if (StartupDiagnostics.RestoreError == null) StartupDiagnostics.RestoreError = ex.GetType().FullName + " (0x" + ex.HResult.ToString("X8") + ")";
+                }
             }
         }
 
@@ -88,6 +99,43 @@ namespace Snapline
                 ex is FileFormatException || ex is ArgumentException || ex is System.Runtime.InteropServices.COMException;
         }
 
+        internal static bool TryPrepareInbox(string folder, out string fullPath, out string error)
+        {
+            fullPath = null; error = null;
+            try {
+                string path = System.IO.Path.GetFullPath(folder);
+                if (path.Length > System.IO.Path.GetPathRoot(path).Length) path = path.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+                Directory.CreateDirectory(path);
+                string probe = System.IO.Path.Combine(path, ".snapline-write-" + Guid.NewGuid().ToString("N") + ".tmp");
+                using (var stream = new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) stream.WriteByte(0);
+                fullPath = path;
+                return true;
+            }
+            catch (Exception ex) {
+                if (!(ex is IOException) && !(ex is UnauthorizedAccessException) && !(ex is ArgumentException) &&
+                    !(ex is NotSupportedException) && !(ex is System.Security.SecurityException)) throw;
+                error = "无法使用截图收件夹，请选择可写的文件夹：" + ex.Message;
+                return false;
+            }
+        }
+
+        internal bool SetInbox(string folder, out string error)
+        {
+            string prepared;
+            if (!TryPrepareInbox(string.IsNullOrEmpty(folder) ? DefaultInbox : folder, out prepared, out error)) return false;
+            string setting = string.Equals(prepared, DefaultInbox, StringComparison.OrdinalIgnoreCase) ? null : prepared;
+            if (string.Equals(Inbox, prepared, StringComparison.OrdinalIgnoreCase) && Settings.InboxFolder == setting) return true;
+            string previous = Inbox, previousSetting = Settings.InboxFolder;
+            Inbox = prepared; Settings.InboxFolder = setting;
+            try { Save(); return true; }
+            catch (Exception ex) {
+                Inbox = previous; Settings.InboxFolder = previousSetting;
+                if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw;
+                error = "无法保存收件夹位置，请检查数据文件夹是否可写后再试。";
+                return false;
+            }
+        }
+
         internal static bool IsImage(string path)
         {
             string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
@@ -95,7 +143,7 @@ namespace Snapline
                 ext == ".gif" || ext == ".tif" || ext == ".tiff";
         }
 
-        internal static BitmapSource Load(string path, int thumbnailWidth)
+        internal static BitmapSource Load(string path, int thumbnailWidth, int thumbnailHeight = 0)
         {
             using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             {
@@ -103,6 +151,7 @@ namespace Snapline
                 image.BeginInit();
                 image.CacheOption = BitmapCacheOption.OnLoad;
                 if (thumbnailWidth > 0) image.DecodePixelWidth = thumbnailWidth;
+                if (thumbnailHeight > 0) image.DecodePixelHeight = thumbnailHeight;
                 image.StreamSource = stream;
                 image.EndInit();
                 image.Freeze();
@@ -115,6 +164,22 @@ namespace Snapline
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(image));
             using (var stream = new MemoryStream()) { encoder.Save(stream); return stream.ToArray(); }
+        }
+
+        private static string DigestFile(string path, out int width, out int height)
+        {
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                var image = new BitmapImage();
+                image.BeginInit();
+                // Hash through the open stream without retaining a full decoded bitmap.
+                image.CacheOption = BitmapCacheOption.None;
+                image.StreamSource = stream;
+                image.EndInit();
+                width = image.PixelWidth; height = image.PixelHeight;
+                StartupDiagnostics.ImageWidth = width; StartupDiagnostics.ImageHeight = height;
+                return Digest(image);
+            }
         }
 
         internal static string Digest(BitmapSource image)
@@ -151,19 +216,21 @@ namespace Snapline
             if (notify) Prune();
             path = System.IO.Path.GetFullPath(path);
             if (!File.Exists(path) || !IsImage(path)) return null;
-            var image = Load(path, 0);
-            string hash = Digest(image);
+            int width, height;
+            string hash = DigestFile(path, out width, out height);
+            int thumbnailWidth = width >= height ? Math.Min(480, width) : 0;
+            int thumbnailHeight = height > width ? Math.Min(480, height) : 0;
             var existing = Items.FirstOrDefault(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase));
             if (existing != null)
             {
                 if (existing.Hash == hash) return null;
                 existing.Hash = hash;
-                existing.Thumbnail = Load(path, Math.Min(480, image.PixelWidth));
+                existing.Thumbnail = Load(path, thumbnailWidth, thumbnailHeight);
                 if (notify) Publish();
                 return existing;
             }
             if (Items.Any(item => item.Hash == hash)) return null;
-            var shot = new Shot { Path = path, Hash = hash, Thumbnail = Load(path, Math.Min(480, image.PixelWidth)), Tilt = random.NextDouble() * 5 - 2.5 };
+            var shot = new Shot { Path = path, Hash = hash, Thumbnail = Load(path, thumbnailWidth, thumbnailHeight), Tilt = random.NextDouble() * 5 - 2.5 };
             Items.Add(shot);
             while (Items.Count > MaxItems) Items.RemoveAt(0);
             if (notify) Publish();
@@ -173,9 +240,11 @@ namespace Snapline
         internal bool Owns(string path)
         {
             path = System.IO.Path.GetFullPath(path);
-            return string.Equals(System.IO.Path.GetDirectoryName(path), Inbox, StringComparison.OrdinalIgnoreCase) &&
+            string directory = System.IO.Path.GetDirectoryName(path);
+            return (string.Equals(directory, Inbox, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(directory, DefaultInbox, StringComparison.OrdinalIgnoreCase)) &&
                 !new FileInfo(path).Attributes.HasFlag(FileAttributes.ReparsePoint) &&
-                !new DirectoryInfo(Inbox).Attributes.HasFlag(FileAttributes.ReparsePoint);
+                !new DirectoryInfo(directory).Attributes.HasFlag(FileAttributes.ReparsePoint);
         }
 
         internal void Remove(Shot shot, bool recycle)

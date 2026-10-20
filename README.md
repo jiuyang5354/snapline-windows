@@ -4,7 +4,7 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的**非�
 
 An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# / WPF and Win32. This project uses its own name and icon and is not endorsed by the upstream author.
 
-**v1.4.7 降低历史图片恢复和去重的内存开销。** 分块计算图片校验，避免额外申请整张图的像素数组；原像素、去重结果、截图和设置继续保留。受限内存下已复现并修复这项大图缓冲区申请失败，反馈用户的实际启动报错仍需在对方电脑上确认。本版为 Windows 预发布版，设置拖动卡顿与背景快照限制仍保留。实际验证范围见 [验证记录](windows/QA.md)。
+**v1.4.8 新增自定义截图收件夹位置，并进一步降低历史图片恢复的内存开销。** 设置 → 存储 → 截图收件夹 → 更改位置 → 保存，可选择或新建文件夹；新截图写入新位置，旧图片保留原位置。长图缩略图限制较长边，历史去重不缓存整张解码原图，并新增本地诊断日志；反馈用户的实际内存报错仍需日志确认。本版为 Windows 预发布版，设置拖动卡顿与背景快照限制仍保留。实际验证范围见 [验证记录](windows/QA.md)。
 
 ![Snapline Windows 窗口预览](docs/preview.png)
 
@@ -16,15 +16,15 @@ v1.4.6 原生 WPF 设置窗口，包含常规、截图、快捷键、存储、�
 
 ## 下载和运行
 
-- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-Setup-v1.4.7.exe)
-- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-v1.4.7.zip)
-- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-Source-v1.4.7.zip)
-- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/Snapline-Windows-Installer-Source-v1.4.7.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.7/SHA256SUMS-Setup.txt)
-- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.4.7)
+- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.8/Snapline-Windows-Setup-v1.4.8.exe)
+- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.8/Snapline-Windows-v1.4.8.zip)
+- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.8/Snapline-Windows-Source-v1.4.8.zip)
+- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.8/Snapline-Windows-Installer-Source-v1.4.8.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.8/SHA256SUMS-Setup.txt)
+- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.4.8)
 
 **安装版：** 双击 EXE，按中文向导安装。“创建桌面快捷方式”默认勾选，可取消；同时提供开始菜单入口和卸载入口。默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，只安装给当前用户，不需要管理员权限。开机启动默认关闭。卸载保留原来的截图和设置，完整说明见 [安装版指南](windows/INSTALLER.zh-CN.md)。
 
-另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，本版对应 NuGet 版本为 `1.4.7-preview`。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
+另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，本版对应 NuGet 版本为 `1.4.8-preview`。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
 
 目标系统为 **Windows 10 / 11，需 .NET Framework 4.8 或更高版本**。解压整个便携包，双击其中的 `Snapline.exe`。程序不需要管理员权限；运行后驻留系统托盘，图标也可能在“隐藏图标”菜单中。
 
@@ -77,8 +77,8 @@ v1.4.6 原生 WPF 设置窗口，包含常规、截图、快捷键、存储、�
 ## 使用注意事项
 
 - **默认收集剪贴板中的图片，不仅是截图。** 从聊天、浏览器或其他应用复制的图片也会被保存。可在托盘关闭“收集剪贴板图片”，改为只监听指定文件夹；文字剪贴板不会保存。
-- 收集的图片默认保存在 `%LOCALAPPDATA%\Snapline\Inbox`，设置在 `%LOCALAPPDATA%\Snapline\settings.json`。最多恢复最近 12 张，超出展示数量的旧文件仍会保留，需要自行按需清理。
-- 点击图片叉号，或悬停时按 `D / Delete`，会把程序收件夹内的图片送入回收站；外部图片只从展示列表取下，保留原文件。“全部取下”保留文件。
+- 收集的图片默认保存在 `%LOCALAPPDATA%\Snapline\Inbox`，设置在 `%LOCALAPPDATA%\Snapline\settings.json`。设置 → 存储 → 更改位置可选择新收件夹，保存后生效；重新选择默认目录可恢复默认。旧图片不搬迁。最多恢复最近 12 张，超出展示数量的旧文件仍会保留，需要自行按需清理。
+- 点击图片叉号，或悬停时按 `D / Delete`，会把当前收件夹或默认收件夹内的图片送入回收站；旧自定义收件夹及外部图片只从展示列表取下，保留原文件。“全部取下”保留文件。
 - 拖放时由目标应用决定接收图片或文件，以及复制或移动。使用移动操作后，原文件可能离开原文件夹。
 - 更新检查会向 `raw.githubusercontent.com` 请求本仓库的公开版本文件；点击下载会访问 GitHub 与其发布文件 CDN。请求包含程序版本，不上传截图、剪贴板内容或本地路径，也没有账号或遥测。关闭自动检查后，仅主动检查或下载时才联网。Windows 剪贴板同步及接收图片的其他应用仍按各自设置处理数据。
 - 程序不接管系统截图快捷键，不修改截图工具的自动保存设置。开机启动默认关闭，可在托盘开启或关闭；便携程序移动后需更新注册路径。

@@ -18,6 +18,7 @@ namespace Snapline
         private uint key, modifiers, captureKey, captureModifiers;
         private string keyError, captureError;
         private string folder;
+        private string inboxFolder;
         private bool startup;
         private bool feedbackError;
         internal bool KeyboardMode { get; private set; }
@@ -54,7 +55,7 @@ namespace Snapline
                 View.Resources["MetalInk"] = SystemParameters.HighContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(Color.FromRgb(32, 43, 45));
                 View.Resources["Line"] = new SolidColorBrush(dark ? Color.FromArgb(45, 235, 245, 250) : Color.FromArgb(34, 54, 73, 77));
                 View.Resources["Tint"] = new SolidColorBrush(dark ? Color.FromArgb(32, 235, 245, 250) : Color.FromArgb(87, 244, 250, 246));
-                Part<TextBlock>("SettingsFeedback").Foreground = Brush(feedbackError ? "Accent" : "Muted");
+                Part<TextBlock>("SettingsFeedback").Foreground = feedbackError ? Brushes.Firebrick : Brush("Muted");
             };
             SourceInitialized += delegate {
                 var screen = Forms.Screen.FromHandle(new WindowInteropHelper(this).Handle);
@@ -66,7 +67,7 @@ namespace Snapline
             PreviewMouseDown += delegate { SetInputMode(false); };
             PreviewKeyDown += delegate { SetInputMode(true); };
             Loaded += delegate {
-                foreach (string name in new[] { "CloseSettings", "CancelSettings", "SaveSettings", "RestoreKeys", "RestoreCaptureKeys", "OpenInbox", "ChooseFolder", "RemoveAll", "CheckUpdates", "ViewAnnouncement", "ReleasePage", "Usage",
+                foreach (string name in new[] { "CloseSettings", "CancelSettings", "SaveSettings", "RestoreKeys", "RestoreCaptureKeys", "OpenInbox", "ChooseInbox", "ChooseFolder", "RemoveAll", "CheckUpdates", "ViewAnnouncement", "ReleasePage", "Usage",
                     "NavGeneral", "NavCapture", "NavKeys", "NavStorage", "NavAbout", "CollectToggle", "PauseToggle", "StartupToggle", "UpdateToggle", "CursorToggle" }) {
                     var control = Part<Control>(name); control.ApplyTemplate();
                     var layer = (Grid)control.Template.FindName("MetalLayer", control);
@@ -79,6 +80,7 @@ namespace Snapline
             Click("RestoreKeys", delegate { SetCandidate(Hotkey.DefaultKey, Hotkey.DefaultModifiers); });
             Click("RestoreCaptureKeys", delegate { SetCaptureCandidate(Hotkey.DefaultCaptureKey, Hotkey.DefaultModifiers); });
             Click("OpenInbox", controller.OpenInbox);
+            Click("ChooseInbox", ChooseInbox);
             Click("ChooseFolder", ChooseFolder);
             Click("RemoveAll", delegate { controller.Store.Clear(); Feedback("已取下所有卡片，原文件保留", false); });
             Click("CheckUpdates", controller.RequestUpdate);
@@ -100,8 +102,8 @@ namespace Snapline
             startup = controller.StartupEnabled;
             Part<CheckBox>("StartupToggle").IsChecked = startup;
             folder = settings.WatchFolder;
-            Part<TextBlock>("InboxPath").Text = controller.Store.Inbox;
-            Part<TextBlock>("InboxPath").ToolTip = controller.Store.Inbox;
+            inboxFolder = controller.Store.Inbox;
+            RefreshInbox();
             RefreshFolder();
             Part<TextBlock>("VersionLabel").Text = "Windows · v" + Updates.CurrentVersion;
             Part<TextBlock>("AboutVersion").Text = "v" + Updates.CurrentVersion + " · Windows 预发布";
@@ -121,7 +123,7 @@ namespace Snapline
         private Brush Brush(string name) { return (Brush)View.FindResource(name); }
         private void Click(string name, Action action) { Part<Button>(name).Click += delegate { action(); }; }
         private void Feedback(string text, bool error)
-        { feedbackError = error; Part<TextBlock>("SettingsFeedback").Text = text; Part<TextBlock>("SettingsFeedback").ToolTip = text; Part<TextBlock>("SettingsFeedback").Foreground = Brush(error ? "Accent" : "Muted"); }
+        { feedbackError = error; Part<TextBlock>("SettingsFeedback").Text = text; Part<TextBlock>("SettingsFeedback").ToolTip = text; Part<TextBlock>("SettingsFeedback").Foreground = error ? Brushes.Firebrick : Brush("Muted"); }
 
         internal void ShowPage(string page)
         {
@@ -193,12 +195,31 @@ namespace Snapline
                 if (dialog.ShowDialog() == Forms.DialogResult.OK) { folder = dialog.SelectedPath; RefreshFolder(); Feedback("有未保存的修改", false); }
         }
 
+        private void ChooseInbox()
+        {
+            using (var dialog = new Forms.FolderBrowserDialog { Description = "选择截图收件夹；仅新截图保存到此处，旧图片保留原位置", SelectedPath = inboxFolder, ShowNewFolderButton = true })
+                if (dialog.ShowDialog() == Forms.DialogResult.OK) SetInboxCandidate(dialog.SelectedPath);
+        }
+
+        internal bool SetInboxCandidate(string folder)
+        {
+            string prepared, error;
+            if (!ImageStore.TryPrepareInbox(folder, out prepared, out error)) { Feedback(error, true); return false; }
+            inboxFolder = prepared;
+            RefreshInbox(); Feedback("有未保存的修改", false);
+            return true;
+        }
+
+        private void RefreshInbox()
+        { Part<TextBlock>("InboxPath").Text = inboxFolder; Part<TextBlock>("InboxPath").ToolTip = inboxFolder; }
+
         private void RefreshFolder()
         { Part<TextBlock>("WatchPath").Text = folder; Part<TextBlock>("WatchPath").ToolTip = folder; }
 
         private void Save()
         {
             string error;
+            if (!controller.ChangeInbox(inboxFolder, out error)) { Feedback(error, true); return; }
             if (!controller.ApplyPreferences(Part<CheckBox>("CollectToggle").IsChecked == true, Part<CheckBox>("PauseToggle").IsChecked == true,
                 Part<CheckBox>("UpdateToggle").IsChecked == true, Part<CheckBox>("CursorToggle").IsChecked == true,
                 folder, key, modifiers, captureKey, captureModifiers, out error)) {

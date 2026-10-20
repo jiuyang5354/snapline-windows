@@ -200,8 +200,11 @@
             <TextBlock Text="存储" FontSize="27" FontWeight="SemiBold" />
             <TextBlock Text="图片保存在本地，取下卡片会保留原文件。" Style="{StaticResource Quiet}" Margin="0,8,0,24" />
             <Grid Height="97">
-              <StackPanel VerticalAlignment="Center"><TextBlock Text="截图收件夹" FontWeight="SemiBold" /><TextBlock Text="%LOCALAPPDATA%\Snapline\Inbox" FontFamily="Consolas" Foreground="{DynamicResource Muted}" Margin="0,7,0,0" MaxWidth="385" HorizontalAlignment="Left" x:Name="InboxPath" TextTrimming="CharacterEllipsis" /></StackPanel>
-              <Button x:Name="OpenInbox" Content="打开收件夹" HorizontalAlignment="Right" VerticalAlignment="Center" />
+              <StackPanel VerticalAlignment="Center"><TextBlock Text="截图收件夹" FontWeight="SemiBold" /><TextBlock Text="%LOCALAPPDATA%\Snapline\Inbox" FontFamily="Consolas" Foreground="{DynamicResource Muted}" Margin="0,7,0,0" MaxWidth="300" HorizontalAlignment="Left" x:Name="InboxPath" TextTrimming="CharacterEllipsis" /></StackPanel>
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button x:Name="ChooseInbox" Content="更改位置" Margin="0,0,12,0" />
+                <Button x:Name="OpenInbox" Content="打开收件夹" />
+              </StackPanel>
             </Grid>
             <Border Style="{StaticResource Rule}" />
             <Grid Height="97">

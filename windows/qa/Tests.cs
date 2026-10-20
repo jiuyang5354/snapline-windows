@@ -48,6 +48,7 @@ namespace Snapline
         [STAThread]
         private static int Main(string[] args)
         {
+            if (args.Length == 2 && args[0] == "--inbox") return CheckInboxLocation(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--settings") return CheckSettingsOnly(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--announcement-content") {
                 string announcementOutput = Path.GetFullPath(args[1]); Directory.CreateDirectory(announcementOutput);
@@ -1526,6 +1527,104 @@ namespace Snapline
                 var child = VisualTreeHelper.GetChild(root, i); yield return child;
                 foreach (var nested in Descendants(child)) yield return nested;
             }
+        }
+
+        private static int CheckInboxLocation(string output)
+        {
+            Directory.CreateDirectory(output);
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            Controller controller = null;
+            try {
+                string root = Path.Combine(output, "run-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+                var store = new ImageStore(Path.Combine(root, "store"));
+                string custom = Path.Combine(root, "中文截图 收件夹"), error;
+                var original = store.AddBitmap(Fixture(300, 220, 0));
+                Check(store.SetInbox(custom + Path.DirectorySeparatorChar, out error) && store.Inbox == custom,
+                    "Inbox can move to a newly created Unicode folder with a normalized path");
+                var shot = store.AddBitmap(Fixture(310, 220, 1));
+                Check(shot != null && File.Exists(shot.Path) && Path.GetDirectoryName(shot.Path) == custom && store.Owns(shot.Path) && store.Owns(original.Path),
+                    "New screenshots are written to and owned by the selected inbox; default inbox captures remain owned");
+                var restored = new ImageStore(store.Root);
+                Check(restored.Inbox == custom && restored.Settings.InboxFolder == custom && restored.Items.Count == 2,
+                    "Inbox location and screenshots survive restart");
+                Check(restored.SetInbox(null, out error) && restored.Inbox == restored.DefaultInbox && restored.Settings.InboxFolder == null &&
+                    new ImageStore(store.Root).Inbox == restored.DefaultInbox,
+                    "Null restores the default inbox and persists the default choice");
+                restored.Remove(restored.Items.Single(item => item.Path == shot.Path), true);
+                Check(File.Exists(shot.Path) && !restored.Owns(shot.Path), "Taking down a previous custom inbox capture preserves its original file");
+                string sibling = custom + "-other";
+                Directory.CreateDirectory(sibling);
+                string external = Path.Combine(sibling, "external.png"); File.Copy(original.Path, external);
+                Check(!restored.Owns(external), "Similarly named folders never become owned inboxes");
+                string state = Path.Combine(store.Root, "settings.json");
+                byte[] before = File.ReadAllBytes(state);
+                Check(!restored.SetInbox(original.Path, out error) && !string.IsNullOrEmpty(error) && restored.Inbox == restored.DefaultInbox &&
+                    File.ReadAllBytes(state).SequenceEqual(before), "A file used as the target is rejected without changing saved preferences");
+                using (var locked = new FileStream(state + ".tmp", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+                    Check(!restored.SetInbox(custom, out error) && restored.Inbox == restored.DefaultInbox && restored.Settings.InboxFolder == null &&
+                        File.ReadAllBytes(state).SequenceEqual(before), "A settings write failure rolls back both inbox fields and preserves saved preferences");
+                restored.Settings.InboxFolder = original.Path; restored.Save();
+                Check(new ImageStore(store.Root).Inbox == restored.DefaultInbox, "An unavailable custom inbox falls back to the default during startup");
+                Check(Directory.GetFiles(custom, ".snapline-write-*").Length == 0, "Writable-folder probes leave no temporary files behind");
+
+                string liveRoot = Path.Combine(root, "live");
+                var live = new ImageStore(liveRoot);
+                live.Settings.ListenClipboard = false; live.Settings.AutoCheckUpdates = false; live.Settings.WatchFolder = null;
+                live.Settings.HotkeyKey = FreeHotkey(7); live.Settings.HotkeyModifiers = 7;
+                live.Settings.CaptureHotkeyKey = FreeHotkey(6); live.Settings.CaptureHotkeyModifiers = 6; live.Save();
+                controller = new Controller(liveRoot, true, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
+                controller.Busy = true;
+                string liveInbox = Path.Combine(root, "监听 收件夹");
+                Check(controller.ChangeInbox(liveInbox, out error), "Controller accepts an inbox change with file watching enabled");
+                string watched = Path.Combine(liveInbox, "watched.png");
+                File.WriteAllBytes(watched, ImageStore.Png(Fixture(320, 220, 2))); Pump(800);
+                Check(controller.Store.Items.Any(item => item.Path == watched), "Inbox change restarts the watcher and collects files from the new folder");
+                string oldFile = Path.Combine(controller.Store.DefaultInbox, "unwatched.png");
+                File.WriteAllBytes(oldFile, ImageStore.Png(Fixture(330, 220, 3))); Pump(600);
+                Check(!controller.Store.Items.Any(item => item.Path == oldFile), "The previous inbox watcher is released after the location changes");
+                controller.Store.Settings.CollectionPaused = true; controller.Store.Save();
+                string candidate = Path.Combine(root, "待保存位置");
+                DialogAction(controller, delegate(SettingsWindow dialog) {
+                    dialog.ShowPage("Storage");
+                    Check(dialog.Part<Button>("ChooseInbox").IsVisible && dialog.SetInboxCandidate(candidate) &&
+                        dialog.Part<TextBlock>("SettingsFeedback").Text == "有未保存的修改" && controller.Store.Inbox == liveInbox,
+                        "Choosing an inbox displays unsaved feedback without changing the active location");
+                    Pump(250);
+                    dialog.UpdateLayout();
+                    var label = dialog.Part<TextBlock>("InboxPath");
+                    var buttons = (StackPanel)dialog.Part<Button>("ChooseInbox").Parent;
+                    var row = (Grid)buttons.Parent;
+                    var labelBox = label.TransformToAncestor(row).TransformBounds(new Rect(label.RenderSize));
+                    var buttonBox = buttons.TransformToAncestor(row).TransformBounds(new Rect(buttons.RenderSize));
+                    Check(label.MaxWidth == 300 && label.TextTrimming == TextTrimming.CharacterEllipsis && labelBox.Right <= buttonBox.Left &&
+                        buttonBox.Right <= row.ActualWidth + 1 && Descendants(dialog.Part<Button>("ChooseInbox")).OfType<LiquidMetal>().Any(material => material.Frames > 0),
+                        "Inbox path and both buttons fit the row; the new button has liquid metal material");
+                    SaveSettingsRender(dialog, Path.Combine(output, "settings-storage.png"));
+                    dialog.Part<Button>("CancelSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                });
+                Check(controller.Store.Inbox == liveInbox && new ImageStore(liveRoot).Inbox == liveInbox, "Cancel preserves the current and saved inbox locations");
+                DialogAction(controller, delegate(SettingsWindow dialog) {
+                    dialog.ShowPage("Storage"); dialog.SetInboxCandidate(candidate);
+                    using (var locked = new FileStream(Path.Combine(liveRoot, "settings.json.tmp"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)) {
+                        dialog.Part<Button>("SaveSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        Check(dialog.IsVisible && controller.Store.Inbox == liveInbox &&
+                            ((SolidColorBrush)dialog.Part<TextBlock>("SettingsFeedback").Foreground).Color == Colors.Firebrick,
+                            "A failed save keeps settings open with a red error and the previous inbox active");
+                    }
+                    dialog.Part<Button>("SaveSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                });
+                Check(controller.Store.Inbox == candidate && new ImageStore(liveRoot).Inbox == candidate, "Saving the settings window applies and persists the chosen inbox");
+                DialogAction(controller, delegate(SettingsWindow dialog) {
+                    dialog.SetInboxCandidate(controller.Store.DefaultInbox);
+                    dialog.Part<Button>("SaveSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                });
+                Check(controller.Store.Inbox == controller.Store.DefaultInbox && controller.Store.Settings.InboxFolder == null,
+                    "Choosing the default folder in settings restores the default inbox");
+                File.WriteAllLines(Path.Combine(output, "inbox-results.txt"), checks);
+                Console.WriteLine("PASS " + checks.Count + " inbox checks using isolated fixtures; no keyboard, mouse or clipboard input."); return 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+            finally { if (controller != null) controller.Dispose(); app.Shutdown(); }
         }
 
         private static int CheckSettingsOnly(string output)

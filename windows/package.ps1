@@ -30,6 +30,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'windows\qa\fix
 Get-ChildItem -LiteralPath (Join-Path $projectRoot 'qa\fixtures\startup-memory') -Filter '*.png' | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\qa\fixtures\startup-memory')
 }
+Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\fixtures\startup-memory\formats') -Destination (Join-Path $sourceRoot 'windows\qa\fixtures\startup-memory\formats') -Recurse
 Get-ChildItem -LiteralPath (Join-Path $projectRoot 'ui') -File | Where-Object { $_.Extension -in @('.xaml','.hlsl','.ps') } | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\ui')
 }

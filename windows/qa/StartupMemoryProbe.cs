@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -55,6 +57,30 @@ internal static class StartupMemoryProbe
         Console.OutputEncoding = new UTF8Encoding(false);
         Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("zh-CN");
         if (args.Length == 3 && args[0] == "--child") return Probe(args[1], args[2]);
+        if (args.Length == 3 && args[0] == "--diagnostics") return CheckDiagnostics(args[1], args[2]);
+        if (args.Length == 4 && (args[0] == "--tall" || args[0] == "--formats"))
+        {
+            string name = args[0].Substring(2);
+            string data = Path.Combine(Path.GetFullPath(args[3]), name);
+            Directory.CreateDirectory(data);
+            if (name == "tall")
+            {
+                Directory.CreateDirectory(Path.GetFullPath(args[2]));
+                using (var image = new Bitmap(512, 20000, PixelFormat.Format32bppArgb))
+                using (var drawing = Graphics.FromImage(image))
+                    for (int i = 0; i < 12; i++) {
+                        drawing.Clear(Color.FromArgb(255, 15 + i * 11, 90 + i, 155 - i));
+                        image.Save(Path.Combine(Path.GetFullPath(args[2]), "tall-" + i.ToString("D2") + ".png"), ImageFormat.Png);
+                    }
+            }
+            string[] images = Directory.GetFiles(Path.GetFullPath(args[2]), name == "tall" ? "tall-*.png" : "format-*.*");
+            Array.Sort(images, StringComparer.Ordinal);
+            if (images.Length != (name == "tall" ? 12 : 9)) throw new InvalidOperationException("Generated image fixtures are incomplete.");
+            File.WriteAllText(Path.Combine(data, "settings.json"), "{\"Paths\":[" +
+                string.Join(",", Array.ConvertAll(images, image => "\"" + image.Replace("\\", "\\\\") + "\"")) +
+                "],\"ListenClipboard\":false,\"CollectionPaused\":true,\"AutoCheckUpdates\":false,\"WatchFolder\":\"\"}");
+            return Run(Path.GetFullPath(args[1]), data) ? 0 : 1;
+        }
         if (args.Length != 3) return 2;
         string assembly = Path.GetFullPath(args[0]);
         string fixtures = Path.GetFullPath(args[1]);
@@ -96,7 +122,9 @@ internal static class StartupMemoryProbe
                 var load = storeType.GetMethod("Load", BindingFlags.Static | BindingFlags.NonPublic);
                 var loadCall = new DynamicMethod("ProbeLoad", typeof(object), new[] { typeof(string), typeof(int) }, storeType.Module, true);
                 var loadIl = loadCall.GetILGenerator();
-                loadIl.Emit(OpCodes.Ldarg_0); loadIl.Emit(OpCodes.Ldarg_1); loadIl.Emit(OpCodes.Call, load); loadIl.Emit(OpCodes.Ret);
+                loadIl.Emit(OpCodes.Ldarg_0); loadIl.Emit(OpCodes.Ldarg_1);
+                if (load.GetParameters().Length == 3) loadIl.Emit(OpCodes.Ldc_I4_0);
+                loadIl.Emit(OpCodes.Call, load); loadIl.Emit(OpCodes.Ret);
                 var loadImage = (Func<string, int, object>)loadCall.CreateDelegate(typeof(Func<string, int, object>));
                 string fixture = Path.GetFileName(root).StartsWith("small-", StringComparison.Ordinal) ? "small" :
                     Path.GetFileName(root).StartsWith("alpha-", StringComparison.Ordinal) ? "alpha" : "large";
@@ -122,10 +150,31 @@ internal static class StartupMemoryProbe
             var store = createStore(root);
             var items = (ICollection)storeType.GetField("Items", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(store);
             string name = Path.GetFileName(root);
-            if (items.Count != (name == "empty" ? 0 : 1)) throw new InvalidOperationException("ImageStore did not restore the expected list.");
             Console.WriteLine("RESTORED " + items.Count + " images; app=" + app.GetName().Version);
+            if (items.Count != (name == "empty" ? 0 : name == "tall" ? 12 : name == "formats" ? 9 : 1)) throw new InvalidOperationException("ImageStore did not restore the expected list.");
             foreach (object item in items)
             {
+                if (name == "formats")
+                {
+                    string path = (string)item.GetType().GetField("Path", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(item);
+                    string pixelHash = (string)item.GetType().GetField("Hash", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(item);
+                    string expectedFile = Path.Combine(Path.GetDirectoryName(path), "expected-digests.txt");
+                    string expectedLine = "FORMAT_DIGEST " + Path.GetFileName(path) + " " + pixelHash;
+                    if (Array.IndexOf(File.ReadAllLines(expectedFile), expectedLine) < 0)
+                        throw new InvalidOperationException("Decoded pixel digest differs from the published v1.4.7 baseline.");
+                    Console.WriteLine("FORMAT_DIGEST " + Path.GetFileName(path) + " " + pixelHash);
+                    continue;
+                }
+                if (name == "tall")
+                {
+                    object thumbnail = item.GetType().GetField("Thumbnail", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(item);
+                    int width = (int)thumbnail.GetType().GetProperty("PixelWidth").GetValue(thumbnail, null);
+                    int height = (int)thumbnail.GetType().GetProperty("PixelHeight").GetValue(thumbnail, null);
+                    if (width > 480 || height > 480 || width < 1 || height < 1)
+                        throw new InvalidOperationException("A restored thumbnail exceeds its memory budget: " + width + "x" + height);
+                    Console.WriteLine("BOUNDED_THUMBNAIL " + width + "x" + height);
+                    continue;
+                }
                 string hash = (string)item.GetType().GetField("Hash", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(item);
                 if (hash != Expected(name)) throw new InvalidOperationException("Restored digest differs from the v1.4.6 baseline.");
                 Console.WriteLine("STORED_DIGEST " + hash);
@@ -148,6 +197,34 @@ internal static class StartupMemoryProbe
             Console.WriteLine(cause.StackTrace);
             return cause is OutOfMemoryException ? 33 : 34;
         }
+    }
+
+    private static int CheckDiagnostics(string assemblyPath, string root)
+    {
+        var assembly = Assembly.LoadFrom(Path.GetFullPath(assemblyPath));
+        var diagnostics = assembly.GetType("Snapline.StartupDiagnostics", true);
+        diagnostics.GetField("Phase", BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, "Synthetic report test");
+        var write = diagnostics.GetMethod("Write", BindingFlags.Static | BindingFlags.NonPublic);
+        Directory.CreateDirectory(root);
+        string marker = Path.Combine(root, "settings.json");
+        File.WriteAllText(marker, "{\"ListenClipboard\":false}");
+        Exception failure;
+        try { throw new OutOfMemoryException("Synthetic exception; not a claim of client reproduction."); }
+        catch (Exception error) { failure = error; }
+        string path = (string)write.Invoke(null, new object[] { root, failure });
+        string report = File.ReadAllText(path);
+        string expectedVersion = FileVersionInfo.GetVersionInfo(Path.GetFullPath(assemblyPath)).ProductVersion;
+        foreach (string value in new[] { "Version: " + expectedVersion, "Synthetic report test", "OutOfMemoryException", "State: failed", "Process64=", "Commit total/available bytes:", "CheckDiagnostics" })
+            if (!report.Contains(value)) throw new InvalidOperationException("Missing diagnostic field: " + value);
+        Console.WriteLine("PASS: Failure report includes version, stage, architecture, memory and the original exception stack.");
+        if (File.ReadAllText(marker) != "{\"ListenClipboard\":false}") throw new InvalidOperationException("Diagnostics changed preferences.");
+        Console.WriteLine("PASS: Failure reporting preserves existing preferences.");
+        if (write.Invoke(null, new object[] { marker, failure }) != null) throw new InvalidOperationException("An unwritable log target should not replace the original failure.");
+        Console.WriteLine("PASS: An unavailable log directory is handled without hiding the original exception.");
+        write.Invoke(null, new object[] { root, null });
+        if (!File.ReadAllText(path).Contains("State: started")) throw new InvalidOperationException("Successful startup report is missing.");
+        Console.WriteLine("PASS: A successful startup writes a bounded status report without an exception.");
+        return 0;
     }
 
     private static bool Run(string assembly, string root)

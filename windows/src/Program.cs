@@ -9,7 +9,8 @@ using System.Windows;
 
 [assembly: AssemblyTitle("Snapline")]
 [assembly: AssemblyDescription("Screenshots on a line · Windows")]
-[assembly: AssemblyVersion("1.4.7.0")]
+[assembly: AssemblyVersion("1.4.8.0")]
+[assembly: AssemblyInformationalVersion("1.4.8-preview")]
 [assembly: TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]
 
 namespace Snapline
@@ -30,6 +31,7 @@ namespace Snapline
             {
                 if (!first) { request.Set(); return; }
                 var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                bool running = false;
                 try
                 {
                     using (var controller = new Controller(root, true))
@@ -42,11 +44,18 @@ namespace Snapline
                         }, null, -1, false);
                         controller.Welcome();
                         app.Dispatcher.BeginInvoke(new Action(delegate { controller.ShowAnnouncement(true); }));
+                        running = true;
+                        StartupDiagnostics.Phase = "Running";
+                        StartupDiagnostics.Write(root, null);
                         try { app.Run(); }
                         finally { registration.Unregister(null); }
                     }
                 }
-                catch (Exception ex) { MessageBox.Show("无法启动 Snapline：\n" + ex.Message, "Snapline", MessageBoxButton.OK, MessageBoxImage.Error); }
+                catch (Exception ex) {
+                    string log = StartupDiagnostics.Write(root, ex);
+                    MessageBox.Show((running ? "Snapline 运行出错：\n" : "无法启动 Snapline：\n") + ex.Message +
+                        (log == null ? "" : "\n\n错误记录已保存，请反馈此文件：\n" + log), "Snapline", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
                 finally { mutex.ReleaseMutex(); }
             }
         }

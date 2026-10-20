@@ -60,7 +60,9 @@ namespace Snapline
             this.launch = launch;
             dispatcher = Dispatcher.CurrentDispatcher;
             updates = updateClient ?? new Updates();
+            StartupDiagnostics.Phase = "Restoring screenshot history";
             Store = new ImageStore(root);
+            StartupDiagnostics.Phase = "Initializing screenshot line and native input";
             Line = new LineWindow(this);
             Sink = new MessageSink(Store.Settings.HotkeyKey, Store.Settings.HotkeyModifiers, Store.Settings.CaptureHotkeyKey, Store.Settings.CaptureHotkeyModifiers);
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Snapline.ico")) icon = new Icon(stream);
@@ -120,6 +122,7 @@ namespace Snapline
             };
             if (watchFiles)
             {
+                StartupDiagnostics.Phase = "Initializing file watchers";
                 watch = new CaptureWatch(Store, dispatcher);
                 watch.Captured += Captured;
                 watch.Error += Notify;
@@ -127,6 +130,7 @@ namespace Snapline
             mouse = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
             mouse.Tick += Tick;
             mouse.Start();
+            StartupDiagnostics.Phase = "Initializing hover shortcuts";
             Hover = new HoverKeys(HoverAction);
             if (!Hover.Registered) Notify("无法启用悬停快捷操作；可继续用鼠标复制、编辑和取下截图。");
             updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
@@ -477,6 +481,14 @@ namespace Snapline
             }
             finally { announcementWindow = null; Busy = DialogOpen; }
         }
+        internal bool ChangeInbox(string folder, out string error)
+        {
+            string previous = Store.Inbox;
+            if (!Store.SetInbox(folder, out error)) return false;
+            if (watch != null && !string.Equals(previous, Store.Inbox, StringComparison.OrdinalIgnoreCase)) watch.Restart();
+            return true;
+        }
+
         internal void OpenInbox() { Shell(Store.Inbox, null); }
         internal void OpenReleases() { Shell(Updates.Repository + "/releases", null); }
 
