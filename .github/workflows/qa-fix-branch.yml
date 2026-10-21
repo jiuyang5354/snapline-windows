@@ -1,0 +1,47 @@
+name: QA (temporary, fix branch)
+
+on:
+  push:
+    branches: ['fix/issue-2-no-crash']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ref: ['226e6a9b754085e51053f220b650447fe81ccf7b', 'fix/issue-2-no-crash']
+        suite: ['-Clipboard', '-Test']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ matrix.ref }}
+          persist-credentials: false
+      - name: Build and run full tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $err = ''
+          try { $out = & ./windows/build.ps1 ${{ matrix.suite }} *>&1 | Out-String } catch { $err = $_.Exception.Message + ' @ ' + $_.InvocationInfo.PositionMessage; $out = ($out | Out-String) }
+          Write-Output $out
+          $lines = ($out -split "`r?`n") | Where-Object { $_.Trim() }
+          $tail = (($lines | Select-Object -Last 20) -join ' || ') -replace '[\r\n]', ' '
+          if ($tail.Length -gt 3500) { $tail = $tail.Substring($tail.Length - 3500) }
+          $results = Get-ChildItem windows/qa/output -Recurse -Filter '*results*.txt' -ErrorAction SilentlyContinue
+          foreach ($r in $results) {
+            $all = @(Get-Content $r.FullName)
+            $fail = @($all | Where-Object { $_ -match 'FAIL' })
+            $mine = @($all | Where-Object { $_ -match 'contained|recoverable error|Synthetic|InvalidOperation|NullReference' })
+            Write-Output ("::notice title=CLIP " + $r.Name + "::" + (($mine | Select-Object -First 20) -join ' | '))
+            $real = @($all | Where-Object { $_ -match '^FAIL|FAIL:' })
+            Write-Output ("::notice title=REALFAIL::" + ($real -join ' | '))
+            Write-Output ("::notice title=RESULT " + $r.Name + "::" + $all.Count + " lines, FAIL " + $fail.Count + ". " + (($fail | Select-Object -First 15) -join ' | '))
+          }
+          Write-Output ("::notice title=ERROR::" + ($err -replace '[\r\n]', ' '))
+          Write-Output ("::notice title=TAIL::" + $tail)
+          exit 0

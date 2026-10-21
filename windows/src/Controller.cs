@@ -233,7 +233,9 @@ namespace Snapline
                 if (shot != null) Captured(shot);
                 return;
             }
-            if (error is OutOfMemoryException || error is OverflowException) {
+            if (!ImageStore.IsImageError(error) && !(error is ExternalException)) {
+                // Out of memory, size overflow, or anything unexpected from another app's clipboard data:
+                // skip this copy instead of retrying or ending Snapline.
                 lastSequence = sequence;
                 string log = StartupDiagnostics.WriteClipboardFailure(Store.Root, error);
                 Notify("已跳过无法处理的剪贴板图片，程序继续运行。" + (log == null ? "" : "错误记录：clipboard-error.log"));
@@ -254,8 +256,7 @@ namespace Snapline
                 return true;
             }
             catch (Exception ex) {
-                if (!ImageStore.IsImageError(ex) && !(ex is ExternalException) && !(ex is OutOfMemoryException) && !(ex is OverflowException)) throw;
-                error = ex;
+                error = ex; // Never let another app's clipboard data end Snapline; the caller decides retry or skip.
                 return false;
             }
         }

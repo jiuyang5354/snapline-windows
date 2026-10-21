@@ -1608,7 +1608,7 @@ namespace Snapline
                 Check(Controller.ReadClipboardImage(nativeBitmap).PixelWidth == 320, "An actual WPF DataObject with a bitmap remains readable");
                 var store = new ImageStore(Path.Combine(output, "run-" + Guid.NewGuid().ToString("N").Substring(0, 8)));
                 Shot captured; Exception error;
-                foreach (Exception failure in new Exception[] { new OutOfMemoryException("Synthetic clipboard decode failure"), new OverflowException("Synthetic clipboard dimensions") }) {
+                foreach (Exception failure in new Exception[] { new OutOfMemoryException("Synthetic clipboard decode failure"), new OverflowException("Synthetic clipboard dimensions"), new InvalidOperationException("Synthetic delayed-render failure"), new NullReferenceException("Synthetic provider bug") }) {
                     int attempts = 0;
                     var broken = new ClipboardFixture { Formats = new[] { "PNG" }, Fetch = delegate { attempts++; throw failure; } };
                     Check(!Controller.TryCollectClipboard(delegate { return broken; }, store, out captured, out error) &&
