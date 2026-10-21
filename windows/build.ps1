@@ -1,4 +1,4 @@
-param([switch]$Test, [switch]$Features, [switch]$Editor, [switch]$Announcements, [switch]$Bindings, [switch]$Materials, [switch]$Storage, [switch]$Inbox)
+param([switch]$Test, [switch]$Features, [switch]$Editor, [switch]$Announcements, [switch]$Bindings, [switch]$Materials, [switch]$Storage, [switch]$Inbox, [switch]$Clipboard)
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $frameworkRoot = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319'
@@ -29,10 +29,12 @@ foreach ($licenseFile in @('LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md')) {
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.zh-CN.md') -Destination (Join-Path $binaryRoot 'README.zh-CN.md')
 Write-Output ('Built: ' + (Join-Path $binaryRoot 'Snapline.exe'))
-if ($Storage) {
+if ($Storage -or $Clipboard) {
     $probe = Join-Path $binaryRoot 'StartupMemoryProbe.exe'
     & $compilerPath '/nologo' '/optimize+' '/platform:anycpu' '/langversion:5' '/warn:4' '/utf8output' '/target:exe' '/reference:System.Drawing.dll' ('/out:' + $probe) (Join-Path $projectRoot 'qa\StartupMemoryProbe.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Startup memory probe compilation failed.' }
+}
+if ($Storage) {
     $storageOutput = Join-Path $projectRoot ('qa\output\startup-memory-v' + [Reflection.AssemblyName]::GetAssemblyName((Join-Path $binaryRoot 'Snapline.exe')).Version.ToString(3))
     New-Item -ItemType Directory -Force -Path $storageOutput | Out-Null
     & $probe (Join-Path $binaryRoot 'Snapline.exe') (Join-Path $projectRoot 'qa\fixtures\startup-memory') (Join-Path $storageOutput ('run-' + [Guid]::NewGuid().ToString('N'))) | Tee-Object -FilePath (Join-Path $storageOutput 'memory-results.txt')
@@ -45,11 +47,16 @@ if ($Storage) {
     & $probe --diagnostics $memoryCandidate (Join-Path $storageOutput ('reports-' + [Guid]::NewGuid().ToString('N'))) | Tee-Object -FilePath (Join-Path $storageOutput 'memory-results.txt') -Append
     if ($LASTEXITCODE -ne 0) { throw 'Failure diagnostic reporting regression failed.' }
 }
-if ($Test -or $Features -or $Editor -or $Announcements -or $Bindings -or $Materials -or $Inbox) {
+if ($Test -or $Features -or $Editor -or $Announcements -or $Bindings -or $Materials -or $Inbox -or $Clipboard) {
     & $compilerPath @common '/target:exe' '/main:Snapline.Tests' ('/out:' + (Join-Path $binaryRoot 'Snapline.Tests.exe')) @sourcePaths (Join-Path $projectRoot 'qa\Tests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Snapline.exe.config') -Destination (Join-Path $binaryRoot 'Snapline.Tests.exe.config')
-    if ($Inbox) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --inbox (Join-Path $projectRoot 'qa\output\inbox-location') }
+    if ($Clipboard) {
+        & (Join-Path $binaryRoot 'Snapline.Tests.exe') --clipboard (Join-Path $projectRoot 'qa\output\clipboard-safety')
+        if ($LASTEXITCODE -ne 0) { throw 'Clipboard safety checks failed.' }
+        & $probe --clipboard (Join-Path $binaryRoot 'Snapline.exe') (Join-Path $projectRoot 'qa\fixtures\startup-memory') (Join-Path $projectRoot ('qa\output\clipboard-memory/run-' + [Guid]::NewGuid().ToString('N')))
+    }
+    elseif ($Inbox) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --inbox (Join-Path $projectRoot 'qa\output\inbox-location') }
     elseif ($Materials) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --materials (Join-Path $projectRoot ('qa\output\materials-v' + [Reflection.AssemblyName]::GetAssemblyName((Join-Path $binaryRoot 'Snapline.exe')).Version.ToString(3))) }
     elseif ($Bindings) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --bindings (Join-Path $projectRoot 'qa\output') }
     elseif ($Editor) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --editor (Join-Path $projectRoot 'qa\output\editor-v1.4.1') }

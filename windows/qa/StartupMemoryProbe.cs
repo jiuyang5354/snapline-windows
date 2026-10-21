@@ -58,6 +58,15 @@ internal static class StartupMemoryProbe
         Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("zh-CN");
         if (args.Length == 3 && args[0] == "--child") return Probe(args[1], args[2]);
         if (args.Length == 3 && args[0] == "--diagnostics") return CheckDiagnostics(args[1], args[2]);
+        if (args.Length == 4 && args[0] == "--clipboard") {
+            string clipboardRoot = Path.GetFullPath(args[3]);
+            Directory.CreateDirectory(Path.Combine(clipboardRoot, "large"));
+            File.Copy(Path.Combine(Path.GetFullPath(args[2]), "large.png"), Path.Combine(clipboardRoot, "large", "generated-fixture.png"), true);
+            bool first = Run(Path.GetFullPath(args[1]), Path.Combine(clipboardRoot, "large-clipboard-stage"));
+            bool second = Run(Path.GetFullPath(args[1]), Path.Combine(clipboardRoot, "large-clipboard-stage"));
+            Console.WriteLine(first && second ? "PASS 2/2 clipboard alpha memory cases at 192 MiB." : "FAIL clipboard alpha memory cases.");
+            return first && second ? 0 : 1;
+        }
         if (args.Length == 4 && (args[0] == "--tall" || args[0] == "--formats"))
         {
             string name = args[0].Substring(2);
@@ -131,6 +140,12 @@ internal static class StartupMemoryProbe
                 object image = loadImage(Path.Combine(Path.GetDirectoryName(root), fixture, "generated-fixture.png"), 0);
                 Console.WriteLine("Full-resolution Load succeeded; PRIVATE_MIB " +
                     (Process.GetCurrentProcess().PrivateMemorySize64 / 1048576.0).ToString("F2", CultureInfo.InvariantCulture));
+                if (Path.GetFileName(root).Contains("-clipboard-")) {
+                    var repair = app.GetType("Snapline.Controller", true).GetMethod("RepairBitmapAlpha", BindingFlags.Static | BindingFlags.NonPublic);
+                    object repaired = repair.Invoke(null, new[] { image });
+                    if (!Object.ReferenceEquals(image, repaired)) throw new InvalidOperationException("Valid alpha should keep the original image.");
+                    Console.WriteLine("Clipboard alpha check succeeded without replacing the original image.");
+                }
                 var digest = storeType.GetMethod("Digest", BindingFlags.Static | BindingFlags.NonPublic);
                 var digestCall = new DynamicMethod("ProbeDigest", typeof(string), new[] { typeof(object) }, storeType.Module, true);
                 var digestIl = digestCall.GetILGenerator();

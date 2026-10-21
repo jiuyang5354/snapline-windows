@@ -48,6 +48,7 @@ namespace Snapline
         [STAThread]
         private static int Main(string[] args)
         {
+            if (args.Length == 2 && args[0] == "--clipboard") return CheckClipboardSafety(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--inbox") return CheckInboxLocation(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--settings") return CheckSettingsOnly(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--announcement-content") {
@@ -1527,6 +1528,124 @@ namespace Snapline
                 var child = VisualTreeHelper.GetChild(root, i); yield return child;
                 foreach (var nested in Descendants(child)) yield return nested;
             }
+        }
+
+        private sealed class ClipboardFixture : System.Windows.IDataObject
+        {
+            internal string[] Formats;
+            internal Func<string, bool, object> Fetch;
+            internal int Reads;
+            public object GetData(string format, bool autoConvert) { Reads++; return Fetch(format, autoConvert); }
+            public object GetData(string format) { return GetData(format, true); }
+            public object GetData(Type format) { return GetData(format.FullName, true); }
+            public string[] GetFormats(bool autoConvert) { return Formats; }
+            public string[] GetFormats() { return Formats; }
+            public bool GetDataPresent(string format, bool autoConvert) { return Formats.Contains(format); }
+            public bool GetDataPresent(string format) { return GetDataPresent(format, true); }
+            public bool GetDataPresent(Type format) { return GetDataPresent(format.FullName, true); }
+            public void SetData(string format, object data, bool autoConvert) { throw new NotSupportedException(); }
+            public void SetData(string format, object data) { throw new NotSupportedException(); }
+            public void SetData(Type format, object data) { throw new NotSupportedException(); }
+            public void SetData(object data) { throw new NotSupportedException(); }
+        }
+
+        private static int CheckClipboardSafety(string output)
+        {
+            Directory.CreateDirectory(output);
+            try {
+                foreach (string format in new[] { DataFormats.UnicodeText, DataFormats.Text, DataFormats.OemText, DataFormats.Rtf,
+                    DataFormats.StringFormat, DataFormats.CommaSeparatedValue, "Biff8", "Biff12", "XML Spreadsheet", "Adobe Illustrator 30.0", "AICB", "PDF", "SVG", "image/svg+xml" }) {
+                    var data = new ClipboardFixture { Formats = new[] { format, "PNG", DataFormats.Bitmap },
+                        Fetch = delegate { throw new InvalidOperationException("Image was requested for mixed clipboard format: " + format); } };
+                    Check(Controller.ReadClipboardImage(data) == null && data.Reads == 0, "Mixed clipboard is skipped before rendering data: " + format);
+                }
+                byte[] png = ImageStore.Png(Fixture(310, 220, 1));
+                foreach (string[] formats in new[] { new[] { "PNG" }, new[] { "PNG", DataFormats.Html }, new[] { "PNG", DataFormats.Bitmap } }) {
+                    var data = new ClipboardFixture { Formats = formats, Fetch = delegate(string format, bool convert) {
+                        if (format != "PNG" || convert) throw new InvalidOperationException("PNG must be requested without conversion");
+                        return new MemoryStream(png);
+                    } };
+                    var image = Controller.ReadClipboardImage(data);
+                    Check(image != null && ImageStore.Digest(image) == ImageStore.Digest(Fixture(310, 220, 1)) && data.Reads == 1,
+                        "Direct PNG collection preserves pixels: " + string.Join(",", formats));
+                }
+                Check(Controller.ReadClipboardImage(null) == null, "An empty clipboard has no image");
+                var own = new ClipboardFixture { Formats = new[] { Controller.ClipboardOrigin, "PNG" }, Fetch = delegate { throw new Exception("Own clipboard was read"); } };
+                Check(Controller.ReadClipboardImage(own) == null && own.Reads == 0, "Own clipboard images do not feed back into collection");
+                var original = BitmapSource.Create(2, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 10, 20, 30, 0, 40, 50, 60, 0 }, 8);
+                var repaired = Controller.RepairBitmapAlpha(original);
+                var pixels = new byte[8]; repaired.CopyPixels(pixels, 8, 0);
+                Check(pixels.SequenceEqual(new byte[] { 10, 20, 30, 255, 40, 50, 60, 255 }), "Legacy zero-alpha bitmap repair preserves RGB and makes pixels visible");
+                foreach (string format in new[] { DataFormats.Bitmap, DataFormats.Dib, DataFormats.GetDataFormat(17).Name }) {
+                    var data = new ClipboardFixture { Formats = new[] { format }, Fetch = delegate(string requested, bool convert) {
+                        if (requested != DataFormats.Bitmap || !convert) throw new InvalidOperationException("Only native bitmap conversion should be requested");
+                        return original;
+                    } };
+                    var bitmap = Controller.ReadClipboardImage(data);
+                    var actual = new byte[8]; bitmap.CopyPixels(actual, 8, 0);
+                    Check(actual.SequenceEqual(pixels) && data.Reads == 1, "Native bitmap clipboard remains supported: " + format);
+                }
+                var metafile = new ClipboardFixture { Formats = new[] { DataFormats.EnhancedMetafile }, Fetch = delegate { throw new Exception("Metafile was rendered"); } };
+                Check(Controller.ReadClipboardImage(metafile) == null && metafile.Reads == 0, "Metafiles are never implicitly rasterized for automatic collection");
+                var multiChunkPixels = new byte[12 * 25000];
+                for (int i = 0; i < multiChunkPixels.Length; i += 4) { multiChunkPixels[i] = 17; multiChunkPixels[i + 1] = 83; multiChunkPixels[i + 2] = 201; }
+                var zeroAlpha = BitmapSource.Create(3, 25000, 120, 144, PixelFormats.Bgra32, null, multiChunkPixels, 12);
+                var fixedChunks = Controller.RepairBitmapAlpha(zeroAlpha);
+                var actualChunks = new byte[multiChunkPixels.Length]; fixedChunks.CopyPixels(actualChunks, 12, 0);
+                for (int i = 3; i < multiChunkPixels.Length; i += 4) multiChunkPixels[i] = 255;
+                Check(actualChunks.SequenceEqual(multiChunkPixels) && fixedChunks.DpiX == 120 && fixedChunks.DpiY == 144 && fixedChunks.IsFrozen,
+                    "Zero-alpha repair spans chunks and preserves RGB, DPI and the final partial chunk");
+                for (int i = 3; i < multiChunkPixels.Length; i += 4) multiChunkPixels[i] = 0;
+                multiChunkPixels[multiChunkPixels.Length - 1] = 127;
+                var lateAlpha = BitmapSource.Create(3, 25000, 96, 96, PixelFormats.Bgra32, null, multiChunkPixels, 12);
+                Check(Object.ReferenceEquals(lateAlpha, Controller.RepairBitmapAlpha(lateAlpha)), "Valid alpha in a late chunk preserves the original image unchanged");
+                var transparentPng = ImageStore.Png(original);
+                var pngData = new ClipboardFixture { Formats = new[] { "PNG" }, Fetch = delegate { return new MemoryStream(transparentPng); } };
+                Check(ImageStore.Digest(Controller.ReadClipboardImage(pngData)) == ImageStore.Digest(original), "Transparent PNG is preserved without legacy bitmap alpha repair");
+                var nativePng = new DataObject(); nativePng.SetData("PNG", new MemoryStream(png), false);
+                Check(Controller.ReadClipboardImage(nativePng).PixelWidth == 310, "An actual WPF DataObject with PNG remains readable");
+                var nativeBitmap = new DataObject(); nativeBitmap.SetImage(Fixture(320, 220, 2));
+                Check(Controller.ReadClipboardImage(nativeBitmap).PixelWidth == 320, "An actual WPF DataObject with a bitmap remains readable");
+                var store = new ImageStore(Path.Combine(output, "run-" + Guid.NewGuid().ToString("N").Substring(0, 8)));
+                Shot captured; Exception error;
+                foreach (Exception failure in new Exception[] { new OutOfMemoryException("Synthetic clipboard decode failure"), new OverflowException("Synthetic clipboard dimensions") }) {
+                    int attempts = 0;
+                    var broken = new ClipboardFixture { Formats = new[] { "PNG" }, Fetch = delegate { attempts++; throw failure; } };
+                    Check(!Controller.TryCollectClipboard(delegate { return broken; }, store, out captured, out error) &&
+                        captured == null && Object.ReferenceEquals(error, failure) && attempts == 1 && store.Items.Count == 0,
+                        "Collection returns a recoverable error after a single image read: " + failure.GetType().Name);
+                }
+                var providerFailure = new OutOfMemoryException("Synthetic data provider failure");
+                Check(!Controller.TryCollectClipboard(delegate { throw providerFailure; }, store, out captured, out error) && Object.ReferenceEquals(error, providerFailure),
+                    "A failure while obtaining the clipboard provider is also contained");
+                var brokenPng = new ClipboardFixture { Formats = new[] { "PNG" }, Fetch = delegate { return new MemoryStream(new byte[] { 1, 2, 3 }); } };
+                Check(!Controller.TryCollectClipboard(delegate { return brokenPng; }, store, out captured, out error) && error != null && store.Items.Count == 0,
+                    "Malformed image data is reported without adding a screenshot");
+                var textData = new ClipboardFixture { Formats = new[] { DataFormats.UnicodeText, "PNG" }, Fetch = delegate { throw new Exception("Mixed payload was accessed"); } };
+                Check(Controller.TryCollectClipboard(delegate { return textData; }, store, out captured, out error) && captured == null && error == null && store.Items.Count == 0,
+                    "Skipped mixed data succeeds without reading content or saving files");
+                var goodData = new ClipboardFixture { Formats = new[] { "PNG" }, Fetch = delegate { return new MemoryStream(png); } };
+                Check(Controller.TryCollectClipboard(delegate { return goodData; }, store, out captured, out error) && captured != null && File.Exists(captured.Path) && store.Items.Count == 1,
+                    "The next valid clipboard image can be collected after failures");
+                byte[] settingsBefore = File.ReadAllBytes(Path.Combine(store.Root, "settings.json"));
+                StartupDiagnostics.Phase = "Running";
+                string startupLog = StartupDiagnostics.Write(store.Root, null);
+                byte[] startupBefore = File.ReadAllBytes(startupLog);
+                string clipboardLog = StartupDiagnostics.WriteClipboardFailure(store.Root, providerFailure);
+                string report = File.ReadAllText(clipboardLog);
+                Check(report.Contains("Collecting clipboard image") && report.Contains("capture-skipped") && report.Contains("OutOfMemoryException") &&
+                    File.ReadAllBytes(startupLog).SequenceEqual(startupBefore) && File.ReadAllBytes(Path.Combine(store.Root, "settings.json")).SequenceEqual(settingsBefore),
+                    "Clipboard failure log is separate from the startup log and preserves settings");
+                Check(StartupDiagnostics.WriteClipboardFailure(Path.Combine(store.Root, "settings.json"), providerFailure) == null,
+                    "An unwritable clipboard log never hides the recoverable collection error");
+                bool propagated = false;
+                try { Controller.TryCollectClipboard(delegate { throw new InvalidOperationException("Synthetic programming error"); }, store, out captured, out error); }
+                catch (InvalidOperationException) { propagated = true; }
+                Check(propagated, "Unrelated programming errors are not swallowed by the resource guard");
+                File.WriteAllLines(Path.Combine(output, "clipboard-results.txt"), checks);
+                Console.WriteLine("PASS " + checks.Count + " clipboard checks without system clipboard input."); return 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         }
 
         private static int CheckInboxLocation(string output)

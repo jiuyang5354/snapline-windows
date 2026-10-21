@@ -61,7 +61,7 @@ $sourceHash = (Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLo
 Get-Item -LiteralPath $outputFile, $sourceZip | Select-Object FullName, Length
 $feedPath = Join-Path $PSScriptRoot 'dist\update.json'
 if (Test-Path -LiteralPath $feedPath) {
-    $feed = @(Get-Content -LiteralPath $feedPath -Raw | ConvertFrom-Json | ForEach-Object { $_ })
+    $feed = @(Get-Content -LiteralPath $feedPath -Raw -Encoding UTF8 | ConvertFrom-Json | ForEach-Object { $_ })
     if ($feed.Count -ne 1 -or $feed[0].tag_name -ne ('v' + $appVersion)) { throw 'Installer does not match the generated update feed version.' }
     $installerName = [System.IO.Path]::GetFileName($outputFile)
     $feed[0].assets = @($feed[0].assets | Where-Object { $_.name -ne $installerName }) + @([ordered]@{

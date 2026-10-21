@@ -227,48 +227,91 @@ namespace Snapline
         private void CaptureClipboard(uint sequence, int attempt)
         {
             if (disposed || Store.Settings.CollectionPaused || !Store.Settings.ListenClipboard || sequence == lastSequence || Native.GetClipboardSequenceNumber() != sequence) return;
-            try
-            {
-                var data = Clipboard.GetDataObject();
-                if (data != null && Array.IndexOf(data.GetFormats(false), ClipboardOrigin) >= 0) { lastSequence = sequence; return; }
-                BitmapSource image = null;
-                var source = data == null ? null : data.GetData("PNG", false) as Stream;
-                if (source != null)
-                {
-                    if (source.CanSeek) source.Position = 0;
-                    image = BitmapFrame.Create(source, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-                    image.Freeze();
-                }
-                if (image == null && Clipboard.ContainsImage()) image = RepairBitmapAlpha(Clipboard.GetImage());
-                if (image != null)
-                {
-                    var shot = Store.AddBitmap(image);
-                    if (shot != null) Captured(shot);
-                }
-                lastSequence = Native.GetClipboardSequenceNumber();
+            Shot shot; Exception error;
+            if (TryCollectClipboard(Clipboard.GetDataObject, Store, out shot, out error)) {
+                lastSequence = sequence;
+                if (shot != null) Captured(shot);
+                return;
             }
-            catch (Exception ex)
-            {
-                if (!ImageStore.IsImageError(ex) && !(ex is ExternalException)) throw;
-                if (attempt >= 7) { lastSequence = sequence; Notify("暂时无法读取剪贴板中的图片，请重新截图或从托盘挂入。"); return; }
-                var retry = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
-                retry.Tick += delegate { retry.Stop(); CaptureClipboard(sequence, attempt + 1); };
-                retry.Start();
+            if (error is OutOfMemoryException || error is OverflowException) {
+                lastSequence = sequence;
+                string log = StartupDiagnostics.WriteClipboardFailure(Store.Root, error);
+                Notify("已跳过无法处理的剪贴板图片，程序继续运行。" + (log == null ? "" : "错误记录：clipboard-error.log"));
+                return;
+            }
+            if (attempt >= 7) { lastSequence = sequence; Notify("暂时无法读取剪贴板中的图片，请重新截图或从托盘挂入。"); return; }
+            var retry = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            retry.Tick += delegate { retry.Stop(); CaptureClipboard(sequence, attempt + 1); };
+            retry.Start();
+        }
+
+        internal static bool TryCollectClipboard(Func<System.Windows.IDataObject> read, ImageStore store, out Shot shot, out Exception error)
+        {
+            shot = null; error = null;
+            try {
+                var image = ReadClipboardImage(read());
+                if (image != null) shot = store.AddBitmap(image);
+                return true;
+            }
+            catch (Exception ex) {
+                if (!ImageStore.IsImageError(ex) && !(ex is ExternalException) && !(ex is OutOfMemoryException) && !(ex is OverflowException)) throw;
+                error = ex;
+                return false;
             }
         }
+
+        internal static BitmapSource ReadClipboardImage(System.Windows.IDataObject data)
+        {
+            if (data == null) return null;
+            string[] formats = data.GetFormats(false);
+            foreach (string ignored in new[] { ClipboardOrigin, DataFormats.UnicodeText, DataFormats.Text, DataFormats.OemText,
+                DataFormats.StringFormat, DataFormats.Rtf, DataFormats.CommaSeparatedValue, "XML Spreadsheet", "PDF", "Portable Document Format", "SVG", "image/svg+xml" })
+                if (HasClipboardFormat(formats, ignored)) return null;
+            foreach (string format in formats)
+                if (format.StartsWith("Biff", StringComparison.OrdinalIgnoreCase) || format.IndexOf("Illustrator", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    format.IndexOf("AICB", StringComparison.OrdinalIgnoreCase) >= 0) return null;
+            BitmapSource image = null;
+            var source = HasClipboardFormat(formats, "PNG") ? data.GetData("PNG", false) as Stream : null;
+            if (source != null) {
+                using (source) {
+                    if (source.CanSeek) source.Position = 0;
+                    image = BitmapFrame.Create(source, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+                }
+                image.Freeze();
+            }
+            if (image == null && (HasClipboardFormat(formats, DataFormats.Bitmap) || HasClipboardFormat(formats, DataFormats.Dib) ||
+                HasClipboardFormat(formats, DataFormats.GetDataFormat(17).Name))) {
+                var bitmap = data.GetData(DataFormats.Bitmap, true) as BitmapSource;
+                if (bitmap != null) { StartupDiagnostics.ImageWidth = bitmap.PixelWidth; StartupDiagnostics.ImageHeight = bitmap.PixelHeight; }
+                image = RepairBitmapAlpha(bitmap);
+            }
+            return image;
+        }
+
+        private static bool HasClipboardFormat(string[] formats, string name)
+        { return Array.Exists(formats, delegate(string format) { return string.Equals(format, name, StringComparison.OrdinalIgnoreCase); }); }
 
         internal static BitmapSource RepairBitmapAlpha(BitmapSource image)
         {
             if (image == null) return null;
             var converted = new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
             int stride = checked(converted.PixelWidth * 4);
-            var pixels = new byte[checked(stride * converted.PixelHeight)];
-            converted.CopyPixels(pixels, stride, 0);
-            bool alphaPresent = false;
-            for (int i = 3; i < pixels.Length; i += 4) if (pixels[i] != 0) { alphaPresent = true; break; }
-            if (alphaPresent) { image.Freeze(); return image; }
-            for (int i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
-            var fixedImage = BitmapSource.Create(image.PixelWidth, image.PixelHeight, image.DpiX, image.DpiY, PixelFormats.Bgra32, null, pixels, stride);
+            int rows = Math.Min(converted.PixelHeight, Math.Max(1, 262144 / stride));
+            var pixels = new byte[checked(stride * rows)];
+            for (int y = 0; y < converted.PixelHeight; y += rows) {
+                int count = Math.Min(rows, converted.PixelHeight - y);
+                converted.CopyPixels(new Int32Rect(0, y, converted.PixelWidth, count), pixels, stride, 0);
+                for (int i = 3; i < checked(stride * count); i += 4)
+                    if (pixels[i] != 0) { image.Freeze(); return image; }
+            }
+            var fixedImage = new WriteableBitmap(image.PixelWidth, image.PixelHeight, image.DpiX, image.DpiY, PixelFormats.Bgra32, null);
+            for (int y = 0; y < converted.PixelHeight; y += rows) {
+                int count = Math.Min(rows, converted.PixelHeight - y);
+                var rectangle = new Int32Rect(0, y, converted.PixelWidth, count);
+                converted.CopyPixels(rectangle, pixels, stride, 0);
+                for (int i = 3; i < checked(stride * count); i += 4) pixels[i] = 255;
+                fixedImage.WritePixels(rectangle, pixels, stride, 0);
+            }
             fixedImage.Freeze();
             return fixedImage;
         }

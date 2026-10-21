@@ -9,8 +9,8 @@ using System.Windows;
 
 [assembly: AssemblyTitle("Snapline")]
 [assembly: AssemblyDescription("Screenshots on a line · Windows")]
-[assembly: AssemblyVersion("1.4.8.0")]
-[assembly: AssemblyInformationalVersion("1.4.8-preview")]
+[assembly: AssemblyVersion("1.4.9.0")]
+[assembly: AssemblyInformationalVersion("1.4.9-preview")]
 [assembly: TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]
 
 namespace Snapline

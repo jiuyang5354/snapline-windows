@@ -25,6 +25,12 @@ namespace Snapline
         private static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
 
         internal static string Write(string root, Exception error)
+        { return WriteReport(root, error, Phase, error == null ? "started" : "failed", "diagnostics.log"); }
+
+        internal static string WriteClipboardFailure(string root, Exception error)
+        { return WriteReport(root, error, "Collecting clipboard image", "capture-skipped", "clipboard-error.log"); }
+
+        private static string WriteReport(string root, Exception error, string phase, string state, string filename)
         {
             try
             {
@@ -33,7 +39,7 @@ namespace Snapline
                 var assembly = Assembly.GetExecutingAssembly();
                 var version = (AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(assembly, typeof(AssemblyInformationalVersionAttribute));
                 report.AppendLine("Version: " + (version == null ? assembly.GetName().Version.ToString() : version.InformationalVersion));
-                report.AppendLine("Phase: " + Phase);
+                report.AppendLine("Phase: " + phase);
                 report.AppendLine("OS: " + Environment.OSVersion + "; OS64=" + Environment.Is64BitOperatingSystem + "; Process64=" + Environment.Is64BitProcess);
                 using (var process = Process.GetCurrentProcess()) {
                     report.AppendLine("Process private bytes: " + process.PrivateMemorySize64);
@@ -48,10 +54,10 @@ namespace Snapline
                 report.AppendLine("Last image dimensions: " + ImageWidth + "x" + ImageHeight);
                 report.AppendLine("History entries/restored/read errors: " + RestoreTotal + "/" + RestoredCount + "/" + RestoreErrors);
                 if (RestoreError != null) report.AppendLine("First history read error: " + RestoreError);
-                report.AppendLine(error == null ? "State: started" : "State: failed");
+                report.AppendLine("State: " + state);
                 if (error != null) report.AppendLine(error.ToString());
                 Directory.CreateDirectory(root);
-                string path = Path.Combine(root, "diagnostics.log");
+                string path = Path.Combine(root, filename);
                 File.WriteAllText(path, report.ToString(), new UTF8Encoding(true));
                 return path;
             }
