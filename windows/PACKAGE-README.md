@@ -4,7 +4,7 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官�
 
 本 NuGet 包包含已发布的 Windows 便携程序，文件位于 `tools/Snapline/`。需要 **Windows 10 / 11 和 .NET Framework 4.8 或更高版本**。
 
-v1.4.9 对应软件包版本 `1.4.9-preview`，增加剪贴板混合格式筛选、位图透明通道检查的内存优化及单次资源异常保护，保留自定义收件夹与现有功能。反馈者 Illustrator 2026 的实际崩溃仍待现场验证，完整改动与验证范围随包保留。
+v1.4.10 对应软件包版本 `1.4.10-preview`，先通过 Windows 原生接口筛选剪贴板格式，避开 OLE 格式枚举路径；自动收集失败每次运行最多提醒一次，后续错误仍更新日志。保留位图内存优化、自定义收件夹与现有功能。反馈者已确认旧版异常保护生效，本次新路径仍待 Illustrator / WPS 现场复测，完整改动与验证范围随包保留。
 
 ## 下载和运行
 

@@ -1534,12 +1534,13 @@ namespace Snapline
         {
             internal string[] Formats;
             internal Func<string, bool, object> Fetch;
+            internal Func<string[]> Enumerate;
             internal int Reads;
             public object GetData(string format, bool autoConvert) { Reads++; return Fetch(format, autoConvert); }
             public object GetData(string format) { return GetData(format, true); }
             public object GetData(Type format) { return GetData(format.FullName, true); }
-            public string[] GetFormats(bool autoConvert) { return Formats; }
-            public string[] GetFormats() { return Formats; }
+            public string[] GetFormats(bool autoConvert) { return Enumerate == null ? Formats : Enumerate(); }
+            public string[] GetFormats() { return GetFormats(true); }
             public bool GetDataPresent(string format, bool autoConvert) { return Formats.Contains(format); }
             public bool GetDataPresent(string format) { return GetDataPresent(format, true); }
             public bool GetDataPresent(Type format) { return GetDataPresent(format.FullName, true); }
@@ -1608,6 +1609,34 @@ namespace Snapline
                 Check(Controller.ReadClipboardImage(nativeBitmap).PixelWidth == 320, "An actual WPF DataObject with a bitmap remains readable");
                 var store = new ImageStore(Path.Combine(output, "run-" + Guid.NewGuid().ToString("N").Substring(0, 8)));
                 Shot captured; Exception error;
+                int providerReads = 0;
+                var enumFailure = new ClipboardFixture { Formats = new[] { "PNG" },
+                    Enumerate = delegate { throw new OutOfMemoryException("Synthetic IDataObject.EnumFormatEtc failure"); },
+                    Fetch = delegate { return new MemoryStream(png); } };
+                Check(Controller.TryCollectClipboard(delegate { providerReads++; return enumFailure; }, store, out captured, out error,
+                    delegate { return new[] { "Adobe Illustrator 30.0", "PNG" }; }) && captured == null && error == null && providerReads == 0,
+                    "Native Illustrator format metadata skips collection before obtaining or enumerating the OLE provider");
+                Check(Controller.TryCollectClipboard(delegate { return enumFailure; }, store, out captured, out error,
+                    delegate { return new[] { "PNG" }; }) && captured != null && error == null && enumFailure.Reads == 1,
+                    "A normal PNG is collected without calling the failing OLE format enumerator");
+                store.Clear();
+                foreach (string[] formats in new[] { new string[0], new[] { DataFormats.Html }, new[] { DataFormats.EnhancedMetafile },
+                    new[] { DataFormats.UnicodeText, "PNG" }, new[] { "Biff12", DataFormats.Bitmap },
+                    new[] { "aicb", "PNG" }, new[] { "Portable Document Format", "PNG" }, new[] { Controller.ClipboardOrigin, "PNG" } }) {
+                    Check(Controller.TryCollectClipboard(delegate { throw new Exception("Skipped clipboard provider was accessed"); }, store, out captured, out error,
+                        delegate { return formats; }) && captured == null && error == null && store.Items.Count == 0,
+                        "Native format screening avoids all provider access: " + string.Join(",", formats));
+                }
+                Check(Controller.TryCollectClipboard(delegate { return null; }, store, out captured, out error, delegate { return new[] { "PNG" }; }) && captured == null,
+                    "A clipboard sequence change before provider access safely skips collection");
+                foreach (Exception failure in new Exception[] { new OutOfMemoryException("Synthetic native enumeration failure"),
+                    new System.ComponentModel.Win32Exception(5) }) {
+                    Check(!Controller.TryCollectClipboard(delegate { throw new Exception("Provider was accessed after enumeration failed"); }, store, out captured, out error,
+                        delegate { throw failure; }) && Object.ReferenceEquals(error, failure) && captured == null,
+                        "Native format enumeration failures preserve retry/resource classification: " + failure.GetType().Name);
+                }
+                Check(!Controller.TryCollectClipboard(delegate { return enumFailure; }, store, out captured, out error) && error is OutOfMemoryException,
+                    "OLE format enumeration exceptions remain contained if the managed fallback is used");
                 foreach (Exception failure in new Exception[] { new OutOfMemoryException("Synthetic clipboard decode failure"), new OverflowException("Synthetic clipboard dimensions") }) {
                     int attempts = 0;
                     var broken = new ClipboardFixture { Formats = new[] { "PNG" }, Fetch = delegate { attempts++; throw failure; } };
@@ -1638,6 +1667,17 @@ namespace Snapline
                     "Clipboard failure log is separate from the startup log and preserves settings");
                 Check(StartupDiagnostics.WriteClipboardFailure(Path.Combine(store.Root, "settings.json"), providerFailure) == null,
                     "An unwritable clipboard log never hides the recoverable collection error");
+                bool notified = false; int notices = 0;
+                for (int i = 0; i < 20; i++) Controller.ReportClipboardFailure(store.Root, new OutOfMemoryException("Repeated failure " + i),
+                    ref notified, delegate(string message) { notices++; Check(message.Contains("本次运行不再重复提醒"), "The first warning explains notification suppression"); });
+                Check(notices == 1 && File.ReadAllText(clipboardLog).Contains("Repeated failure 19"),
+                    "Twenty consecutive clipboard failures notify once and retain the latest failure in the log");
+                Check(File.ReadAllBytes(startupLog).SequenceEqual(startupBefore) && File.ReadAllBytes(Path.Combine(store.Root, "settings.json")).SequenceEqual(settingsBefore),
+                    "Repeated failure reports preserve startup diagnostics and user settings");
+                bool nextRun = false;
+                Controller.ReportClipboardFailure(Path.Combine(store.Root, "settings.json"), providerFailure, ref nextRun, delegate { notices++; });
+                Controller.ReportClipboardFailure(Path.Combine(store.Root, "settings.json"), providerFailure, ref nextRun, delegate { notices++; });
+                Check(notices == 2, "A new run can warn once even when its diagnostic log cannot be written");
                 bool propagated = false;
                 try { Controller.TryCollectClipboard(delegate { throw new InvalidOperationException("Synthetic programming error"); }, store, out captured, out error); }
                 catch (InvalidOperationException) { propagated = true; }

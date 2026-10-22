@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -29,6 +30,14 @@ namespace Snapline
         [DllImport("user32.dll")]
         internal static extern uint GetClipboardSequenceNumber();
         [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool OpenClipboard(IntPtr window);
+        [DllImport("user32.dll")]
+        private static extern bool CloseClipboard();
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint EnumClipboardFormats(uint format);
+        [DllImport("kernel32.dll")]
+        private static extern void SetLastError(uint error);
+        [DllImport("user32.dll", SetLastError = true)]
         internal static extern bool RegisterHotKey(IntPtr hwnd, int id, uint modifiers, uint key);
         [DllImport("user32.dll")]
         internal static extern bool UnregisterHotKey(IntPtr hwnd, int id);
@@ -56,6 +65,26 @@ namespace Snapline
         private static extern IntPtr MonitorFromPoint(POINT point, uint flags);
         [DllImport("shell32.dll")]
         private static extern int SHGetKnownFolderPath(ref Guid id, uint flags, IntPtr token, out IntPtr path);
+
+        internal static string[] ClipboardFormats()
+        {
+            if (!OpenClipboard(IntPtr.Zero)) throw new System.ComponentModel.Win32Exception();
+            try {
+                var formats = new List<string>();
+                uint format = 0;
+                while (true) {
+                    SetLastError(0);
+                    format = EnumClipboardFormats(format);
+                    if (format == 0) {
+                        int error = Marshal.GetLastWin32Error();
+                        if (error != 0) throw new System.ComponentModel.Win32Exception(error);
+                        return formats.ToArray();
+                    }
+                    formats.Add(System.Windows.DataFormats.GetDataFormat((int)format).Name);
+                }
+            }
+            finally { CloseClipboard(); }
+        }
 
         internal static Point Cursor()
         {

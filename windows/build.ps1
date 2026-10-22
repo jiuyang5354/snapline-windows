@@ -54,7 +54,12 @@ if ($Test -or $Features -or $Editor -or $Announcements -or $Bindings -or $Materi
     if ($Clipboard) {
         & (Join-Path $binaryRoot 'Snapline.Tests.exe') --clipboard (Join-Path $projectRoot 'qa\output\clipboard-safety')
         if ($LASTEXITCODE -ne 0) { throw 'Clipboard safety checks failed.' }
-        & $probe --clipboard (Join-Path $binaryRoot 'Snapline.exe') (Join-Path $projectRoot 'qa\fixtures\startup-memory') (Join-Path $projectRoot ('qa\output\clipboard-memory/run-' + [Guid]::NewGuid().ToString('N')))
+        $nativeProbe = Join-Path $binaryRoot 'ClipboardNativeProbe.exe'
+        & $compilerPath '/nologo' '/optimize+' '/platform:anycpu' '/langversion:5' '/warn:4' '/utf8output' '/target:exe' '/reference:System.Core.dll' ('/out:' + $nativeProbe) (Join-Path $projectRoot 'qa\ClipboardNativeProbe.cs')
+        if ($LASTEXITCODE -ne 0) { throw 'Native clipboard probe compilation failed.' }
+        & $nativeProbe (Join-Path $binaryRoot 'Snapline.exe') | Tee-Object -FilePath (Join-Path $projectRoot 'qa\output\clipboard-safety\native-clipboard-results.txt')
+        if ($LASTEXITCODE -ne 0) { throw 'Native clipboard screening failed.' }
+        & $probe --clipboard (Join-Path $binaryRoot 'Snapline.exe') (Join-Path $projectRoot 'qa\fixtures\startup-memory') (Join-Path $projectRoot ('qa\output\clipboard-memory/run-' + [Guid]::NewGuid().ToString('N'))) | Tee-Object -FilePath (Join-Path $projectRoot 'qa\output\clipboard-safety\clipboard-memory-results.txt')
     }
     elseif ($Inbox) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --inbox (Join-Path $projectRoot 'qa\output\inbox-location') }
     elseif ($Materials) { & (Join-Path $binaryRoot 'Snapline.Tests.exe') --materials (Join-Path $projectRoot ('qa\output\materials-v' + [Reflection.AssemblyName]::GetAssemblyName((Join-Path $binaryRoot 'Snapline.exe')).Version.ToString(3))) }

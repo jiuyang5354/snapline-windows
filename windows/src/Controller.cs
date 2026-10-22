@@ -35,6 +35,7 @@ namespace Snapline
         private DateTime? awaySince;
         private string edgeDisplay;
         private uint lastSequence;
+        private bool clipboardFailureNotified;
         private bool disposed;
         private readonly Forms.ToolStripMenuItem clipboardMenu;
         private readonly Forms.ToolStripMenuItem toggleMenu;
@@ -228,28 +229,30 @@ namespace Snapline
         {
             if (disposed || Store.Settings.CollectionPaused || !Store.Settings.ListenClipboard || sequence == lastSequence || Native.GetClipboardSequenceNumber() != sequence) return;
             Shot shot; Exception error;
-            if (TryCollectClipboard(Clipboard.GetDataObject, Store, out shot, out error)) {
+            if (TryCollectClipboard(delegate { return Native.GetClipboardSequenceNumber() == sequence ? Clipboard.GetDataObject() : null; },
+                Store, out shot, out error, Native.ClipboardFormats)) {
                 lastSequence = sequence;
                 if (shot != null) Captured(shot);
                 return;
             }
             if (error is OutOfMemoryException || error is OverflowException) {
                 lastSequence = sequence;
-                string log = StartupDiagnostics.WriteClipboardFailure(Store.Root, error);
-                Notify("已跳过无法处理的剪贴板图片，程序继续运行。" + (log == null ? "" : "错误记录：clipboard-error.log"));
+                ReportClipboardFailure(Store.Root, error, ref clipboardFailureNotified, Notify);
                 return;
             }
-            if (attempt >= 7) { lastSequence = sequence; Notify("暂时无法读取剪贴板中的图片，请重新截图或从托盘挂入。"); return; }
+            if (attempt >= 7) { lastSequence = sequence; ReportClipboardFailure(Store.Root, error, ref clipboardFailureNotified, Notify); return; }
             var retry = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
             retry.Tick += delegate { retry.Stop(); CaptureClipboard(sequence, attempt + 1); };
             retry.Start();
         }
 
-        internal static bool TryCollectClipboard(Func<System.Windows.IDataObject> read, ImageStore store, out Shot shot, out Exception error)
+        internal static bool TryCollectClipboard(Func<System.Windows.IDataObject> read, ImageStore store, out Shot shot, out Exception error, Func<string[]> readFormats = null)
         {
             shot = null; error = null;
             try {
-                var image = ReadClipboardImage(read());
+                string[] formats = readFormats == null ? null : readFormats();
+                if (formats != null && !CanCollectClipboard(formats)) return true;
+                var image = ReadClipboardImage(read(), formats);
                 if (image != null) shot = store.AddBitmap(image);
                 return true;
             }
@@ -260,16 +263,32 @@ namespace Snapline
             }
         }
 
-        internal static BitmapSource ReadClipboardImage(System.Windows.IDataObject data)
+        internal static void ReportClipboardFailure(string root, Exception error, ref bool notified, Action<string> notify)
         {
-            if (data == null) return null;
-            string[] formats = data.GetFormats(false);
+            string log = StartupDiagnostics.WriteClipboardFailure(root, error);
+            if (notified) return;
+            notified = true;
+            notify("已跳过无法处理的剪贴板图片，程序继续运行。本次运行不再重复提醒。" +
+                (log == null ? "" : "错误记录：clipboard-error.log"));
+        }
+
+        internal static bool CanCollectClipboard(string[] formats)
+        {
             foreach (string ignored in new[] { ClipboardOrigin, DataFormats.UnicodeText, DataFormats.Text, DataFormats.OemText,
                 DataFormats.StringFormat, DataFormats.Rtf, DataFormats.CommaSeparatedValue, "XML Spreadsheet", "PDF", "Portable Document Format", "SVG", "image/svg+xml" })
-                if (HasClipboardFormat(formats, ignored)) return null;
+                if (HasClipboardFormat(formats, ignored)) return false;
             foreach (string format in formats)
                 if (format.StartsWith("Biff", StringComparison.OrdinalIgnoreCase) || format.IndexOf("Illustrator", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    format.IndexOf("AICB", StringComparison.OrdinalIgnoreCase) >= 0) return null;
+                    format.IndexOf("AICB", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            return HasClipboardFormat(formats, "PNG") || HasClipboardFormat(formats, DataFormats.Bitmap) ||
+                HasClipboardFormat(formats, DataFormats.Dib) || HasClipboardFormat(formats, DataFormats.GetDataFormat(17).Name);
+        }
+
+        internal static BitmapSource ReadClipboardImage(System.Windows.IDataObject data, string[] formats = null)
+        {
+            if (data == null) return null;
+            formats = formats ?? data.GetFormats(false);
+            if (!CanCollectClipboard(formats)) return null;
             BitmapSource image = null;
             var source = HasClipboardFormat(formats, "PNG") ? data.GetData("PNG", false) as Stream : null;
             if (source != null) {
