@@ -279,7 +279,7 @@ namespace Snapline
                 if (HasClipboardFormat(formats, ignored)) return false;
             foreach (string format in formats)
                 if (format.StartsWith("Biff", StringComparison.OrdinalIgnoreCase) || format.IndexOf("Illustrator", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    format.IndexOf("AICB", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+                    format.IndexOf("AICB", StringComparison.OrdinalIgnoreCase) >= 0 || IsOfficeObjectFormat(format)) return false;
             return HasClipboardFormat(formats, "PNG") || HasClipboardFormat(formats, DataFormats.Bitmap) ||
                 HasClipboardFormat(formats, DataFormats.Dib) || HasClipboardFormat(formats, DataFormats.GetDataFormat(17).Name);
         }
@@ -305,6 +305,19 @@ namespace Snapline
                 image = RepairBitmapAlpha(bitmap);
             }
             return image;
+        }
+
+        // Office / WPS put a rendered picture (PNG, JFIF, Bitmap, EMF) beside their own shape data when a whole
+        // text box, shape or slide object is selected and copied. Those pictures are previews of editable
+        // objects, not screenshots, so the object markers skip the clipboard before any image is read.
+        private static readonly string[] OfficeObjectMarkers = { "GVML", "PowerPoint", "Office Drawing", "Kingsoft", "WPS" };
+
+        internal static bool IsOfficeObjectFormat(string format)
+        {
+            if (string.IsNullOrEmpty(format)) return false;
+            foreach (string marker in OfficeObjectMarkers)
+                if (format.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            return false;
         }
 
         private static bool HasClipboardFormat(string[] formats, string name)
