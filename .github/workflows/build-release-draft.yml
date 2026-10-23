@@ -20,6 +20,8 @@ jobs:
         working-directory: windows
         run: |
           $ErrorActionPreference = 'Stop'
+          # Runner consoles default to UTF-8 (65001); .NET Framework then writes a BOM before the memory probe's GO gate.
+          chcp.com 437 | Out-Null
           ./build.ps1 -Clipboard
       - name: Package portable and source
         shell: pwsh
