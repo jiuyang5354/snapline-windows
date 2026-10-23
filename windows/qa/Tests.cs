@@ -1570,6 +1570,20 @@ namespace Snapline
                     Check(image != null && ImageStore.Digest(image) == ImageStore.Digest(Fixture(310, 220, 1)) && data.Reads == 1,
                         "Direct PNG collection preserves pixels: " + string.Join(",", formats));
                 }
+                foreach (string[] formats in new[] {
+                    new[] { "Art::GVML ClipFormat", "PNG", "JFIF", "GIF", DataFormats.EnhancedMetafile, DataFormats.Bitmap, "Object Descriptor" },
+                    new[] { "PowerPoint 12.0 Internal Shapes", "PNG", DataFormats.Bitmap },
+                    new[] { "Office Drawing Shape Format", "PNG" },
+                    new[] { "Kingsoft Shapes Tag", "PNG", DataFormats.Bitmap },
+                    new[] { "WPS Drawing Shape Format", DataFormats.Dib } }) {
+                    var office = new ClipboardFixture { Formats = formats,
+                        Fetch = delegate { throw new InvalidOperationException("Office object preview was requested"); } };
+                    Check(Controller.ReadClipboardImage(office) == null && office.Reads == 0,
+                        "A selected Office / WPS text box or shape is skipped before its preview image is read: " + formats[0]);
+                }
+                foreach (string[] formats in new[] { new[] { "PNG", DataFormats.Html, "Chromium internal source URL" },
+                    new[] { DataFormats.Bitmap, DataFormats.Dib, "Object Descriptor", "Embed Source" } })
+                    Check(Controller.CanCollectClipboard(formats), "Ordinary images are not mistaken for Office objects: " + formats[0]);
                 Check(Controller.ReadClipboardImage(null) == null, "An empty clipboard has no image");
                 var own = new ClipboardFixture { Formats = new[] { Controller.ClipboardOrigin, "PNG" }, Fetch = delegate { throw new Exception("Own clipboard was read"); } };
                 Check(Controller.ReadClipboardImage(own) == null && own.Reads == 0, "Own clipboard images do not feed back into collection");
@@ -1622,7 +1636,8 @@ namespace Snapline
                 store.Clear();
                 foreach (string[] formats in new[] { new string[0], new[] { DataFormats.Html }, new[] { DataFormats.EnhancedMetafile },
                     new[] { DataFormats.UnicodeText, "PNG" }, new[] { "Biff12", DataFormats.Bitmap },
-                    new[] { "aicb", "PNG" }, new[] { "Portable Document Format", "PNG" }, new[] { Controller.ClipboardOrigin, "PNG" } }) {
+                    new[] { "aicb", "PNG" }, new[] { "Portable Document Format", "PNG" }, new[] { Controller.ClipboardOrigin, "PNG" },
+                    new[] { "Art::GVML ClipFormat", "PowerPoint 12.0 Internal Shapes", "PNG", DataFormats.Bitmap } }) {
                     Check(Controller.TryCollectClipboard(delegate { throw new Exception("Skipped clipboard provider was accessed"); }, store, out captured, out error,
                         delegate { return formats; }) && captured == null && error == null && store.Items.Count == 0,
                         "Native format screening avoids all provider access: " + string.Join(",", formats));
