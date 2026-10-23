@@ -1,0 +1,69 @@
+name: Build release draft
+
+on:
+  push:
+    branches: ['build/**']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build and clipboard checks
+        shell: pwsh
+        working-directory: windows
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./build.ps1 -Clipboard
+      - name: Package portable and source
+        shell: pwsh
+        working-directory: windows
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./package.ps1
+      - name: Package installer
+        shell: pwsh
+        working-directory: windows
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tools = Join-Path $PWD '.tools'
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          $zip = Join-Path $env:RUNNER_TEMP 'nsis.zip'
+          Invoke-WebRequest -Uri 'https://downloads.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13.zip' -OutFile $zip -UserAgent 'curl/8'
+          Expand-Archive -LiteralPath $zip -DestinationPath $tools -Force
+          $version = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $PWD 'bin\Snapline.exe')).Version.ToString(3)
+          ./package-installer.ps1 -PortableZip (Join-Path $PWD ('Snapline-Windows-v' + $version + '.zip'))
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Upload build outputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: snapline-release
+          path: |
+            windows/Snapline-Windows-v*.zip
+            windows/Snapline-Windows-Source-v*.zip
+            windows/dist/installer/Snapline-Windows-Setup-v*.exe
+            windows/dist/installer/Snapline-Windows-Installer-Source-v*.zip
+            windows/dist/installer/SHA256SUMS-Setup.txt
+            windows/dist/update.json
+            SHA256SUMS.txt
+            windows/qa/output/clipboard-safety/
+      - name: Create draft prerelease
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'v' + $env:VERSION
+          $notes = Join-Path $env:RUNNER_TEMP 'notes.md'
+          $changelog = Get-Content -LiteralPath CHANGELOG.md -Raw -Encoding utf8
+          $section = ($changelog -split "(?m)^# Snapline ")[1]
+          ('# Snapline ' + $section.Trim()) | Out-File -FilePath $notes -Encoding utf8
+          gh release create $tag --repo $env:GITHUB_REPOSITORY --draft --prerelease --target $env:GITHUB_SHA --title ('Snapline ' + $tag) --notes-file $notes `
+            ('windows/Snapline-Windows-' + $tag + '.zip') ('windows/Snapline-Windows-Source-' + $tag + '.zip') `
+            ('windows/dist/installer/Snapline-Windows-Setup-' + $tag + '.exe') ('windows/dist/installer/Snapline-Windows-Installer-Source-' + $tag + '.zip') `
+            SHA256SUMS.txt windows/dist/installer/SHA256SUMS-Setup.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed.' }
