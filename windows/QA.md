@@ -1,5 +1,7 @@
 # Snapline Windows 验证记录
 
+2026-10-23 v1.4.11 发布构建（GitHub Actions windows-latest）：跟进 Issue #2 中 PowerPoint 选中整个文本框复制被收成图片的反馈。新增 Office / WPS 对象格式（Art::GVML、PowerPoint 内部形状、Office Drawing、Kingsoft / WPS）筛选，在读取预览图之前跳过。剪贴板专项 **64/64**（新增 8 项）、原生接口只读专项 **4/4**、8K 位图 192 MiB 限额 **2/2**（峰值约 151.9 MiB）通过。未运行安装器测试与完整键鼠回归，未复现真实 PowerPoint / WPS 操作。
+
 2026-10-22 v1.4.10 发布准备构建：跟进 Issue #2 中反馈者对 v1.4.9 的复测，现场日志为 `State: capture-skipped`，`IDataObject.EnumFormatEtc` 内存异常已被拦截。此次改为 Win32 `OpenClipboard` / `EnumClipboardFormats` 先筛选格式，已知混合内容不获取 OLE 数据对象；正常图片复用格式列表，避免再次调用 OLE 格式枚举。自动收集失败每次运行最多通知一次，仍更新本地错误日志。
 
 新增的筛选顺序回归先在旧代码上失败，修改后剪贴板专项 **56/56** 通过：含 OLE 格式枚举内存异常注入、混合内容在获取提供者前跳过、普通 PNG 不调用故障枚举器、原生格式读取失败的资源/重试分类、序号改变时跳过、连续 20 次错误只通知一次且保留最近日志。原有 PNG/位图、透明度、混合格式与异常后继续收集检查保持通过。
