@@ -1,0 +1,236 @@
+[
+  {
+    "files": [
+      {
+        "target": "PdfSharp-gdi.dll",
+        "entry": "lib/net462/PdfSharp-gdi.dll"
+      },
+      {
+        "target": "PdfSharp.System.dll",
+        "entry": "lib/net462/PdfSharp.System.dll"
+      },
+      {
+        "target": "PdfSharp.Cryptography.dll",
+        "entry": "lib/net462/PdfSharp.Cryptography.dll"
+      },
+      {
+        "target": "PdfSharp.Shared.dll",
+        "entry": "lib/net462/PdfSharp.Shared.dll"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/pdfsharp-gdi/6.2.4/pdfsharp-gdi.6.2.4.nupkg",
+    "id": "pdfsharp-gdi",
+    "version": "6.2.4",
+    "archive": "pdfsharp-gdi.6.2.4.nupkg",
+    "sha256": "e7f5b705598f6f23fcea34789eef495f4333aad1c37a96edd0d369e09eb213df"
+  },
+  {
+    "files": [
+      {
+        "target": "Microsoft.Extensions.Logging.Abstractions.dll",
+        "entry": "lib/net462/Microsoft.Extensions.Logging.Abstractions.dll"
+      },
+      {
+        "target": "licenses/microsoft.extensions.logging.abstractions-8.0.3.txt",
+        "entry": "LICENSE.TXT"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging.abstractions/8.0.3/microsoft.extensions.logging.abstractions.8.0.3.nupkg",
+    "id": "microsoft.extensions.logging.abstractions",
+    "version": "8.0.3",
+    "archive": "microsoft.extensions.logging.abstractions.8.0.3.nupkg",
+    "sha256": "e4c498d5a13051b4577a148f1d8c3470167215c507e2392069b75dc61322bb74"
+  },
+  {
+    "files": [
+      {
+        "target": "Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+        "entry": "lib/net462/Microsoft.Extensions.DependencyInjection.Abstractions.dll"
+      },
+      {
+        "target": "licenses/microsoft.extensions.dependencyinjection.abstractions-8.0.2.txt",
+        "entry": "LICENSE.TXT"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.dependencyinjection.abstractions/8.0.2/microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg",
+    "id": "microsoft.extensions.dependencyinjection.abstractions",
+    "version": "8.0.2",
+    "archive": "microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg",
+    "sha256": "51f2df1100245f10da54f0bb7e813f277155117777d4fbbab902214e27372606"
+  },
+  {
+    "files": [
+      {
+        "target": "Microsoft.Bcl.AsyncInterfaces.dll",
+        "entry": "lib/net462/Microsoft.Bcl.AsyncInterfaces.dll"
+      },
+      {
+        "target": "licenses/microsoft.bcl.asyncinterfaces-8.0.0.txt",
+        "entry": "LICENSE.TXT"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.bcl.asyncinterfaces/8.0.0/microsoft.bcl.asyncinterfaces.8.0.0.nupkg",
+    "id": "microsoft.bcl.asyncinterfaces",
+    "version": "8.0.0",
+    "archive": "microsoft.bcl.asyncinterfaces.8.0.0.nupkg",
+    "sha256": "f5a5a68b03092ab2abf68843d4a4aea25dfbcbe8dd0f13c625cb779b6fc1927c"
+  },
+  {
+    "files": [
+      {
+        "target": "System.Security.Cryptography.Pkcs.dll",
+        "entry": "lib/net462/System.Security.Cryptography.Pkcs.dll"
+      },
+      {
+        "target": "licenses/system.security.cryptography.pkcs-8.0.1.txt",
+        "entry": "LICENSE.TXT"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/system.security.cryptography.pkcs/8.0.1/system.security.cryptography.pkcs.8.0.1.nupkg",
+    "id": "system.security.cryptography.pkcs",
+    "version": "8.0.1",
+    "archive": "system.security.cryptography.pkcs.8.0.1.nupkg",
+    "sha256": "28c348909df243fe4ee962213e3c8021aaecbc8321929dba03a69bcb92a49de5"
+  },
+  {
+    "files": [
+      {
+        "target": "licenses/system.memory-4.5.5.txt",
+        "entry": "LICENSE.TXT"
+      },
+      {
+        "target": "System.Memory.dll",
+        "entry": "lib/net461/System.Memory.dll"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/system.memory/4.5.5/system.memory.4.5.5.nupkg",
+    "id": "system.memory",
+    "version": "4.5.5",
+    "archive": "system.memory.4.5.5.nupkg",
+    "sha256": "10f43da352a29fb2b3188e4edd4dcf5100194c8b526e4f61fe2e2b5623775a22"
+  },
+  {
+    "files": [
+      {
+        "target": "licenses/system.buffers-4.5.1.txt",
+        "entry": "LICENSE.TXT"
+      },
+      {
+        "target": "System.Buffers.dll",
+        "entry": "lib/net461/System.Buffers.dll"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/system.buffers/4.5.1/system.buffers.4.5.1.nupkg",
+    "id": "system.buffers",
+    "version": "4.5.1",
+    "archive": "system.buffers.4.5.1.nupkg",
+    "sha256": "c30b3dd2c7e2f4cee4b823d692fd42118309b42ab1f5007f923d329a5b0d6b12"
+  },
+  {
+    "files": [
+      {
+        "target": "licenses/system.numerics.vectors-4.5.0.txt",
+        "entry": "LICENSE.TXT"
+      },
+      {
+        "target": "System.Numerics.Vectors.dll",
+        "entry": "lib/net46/System.Numerics.Vectors.dll"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/system.numerics.vectors/4.5.0/system.numerics.vectors.4.5.0.nupkg",
+    "id": "system.numerics.vectors",
+    "version": "4.5.0",
+    "archive": "system.numerics.vectors.4.5.0.nupkg",
+    "sha256": "a9d49320581fda1b4f4be6212c68c01a22cdf228026099c20a8eabefcf90f9cf"
+  },
+  {
+    "files": [
+      {
+        "target": "licenses/system.runtime.compilerservices.unsafe-4.5.3.txt",
+        "entry": "LICENSE.TXT"
+      },
+      {
+        "target": "System.Runtime.CompilerServices.Unsafe.dll",
+        "entry": "lib/net461/System.Runtime.CompilerServices.Unsafe.dll"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/system.runtime.compilerservices.unsafe/4.5.3/system.runtime.compilerservices.unsafe.4.5.3.nupkg",
+    "id": "system.runtime.compilerservices.unsafe",
+    "version": "4.5.3",
+    "archive": "system.runtime.compilerservices.unsafe.4.5.3.nupkg",
+    "sha256": "96764c52a44ee1161151e48ef07489f72047a851cb55b99e9f01d6908536d1a9"
+  },
+  {
+    "files": [
+      {
+        "target": "licenses/system.threading.tasks.extensions-4.5.4.txt",
+        "entry": "LICENSE.TXT"
+      },
+      {
+        "target": "System.Threading.Tasks.Extensions.dll",
+        "entry": "lib/net461/System.Threading.Tasks.Extensions.dll"
+      }
+    ],
+    "url": "https://api.nuget.org/v3-flatcontainer/system.threading.tasks.extensions/4.5.4/system.threading.tasks.extensions.4.5.4.nupkg",
+    "id": "system.threading.tasks.extensions",
+    "version": "4.5.4",
+    "archive": "system.threading.tasks.extensions.4.5.4.nupkg",
+    "sha256": "a304a963cc0796c5179f9c6b7d8022bbce3b2fa7c029eb6196f631f7b462d678"
+  },
+  {
+    "files": [
+      {
+        "target": "webp/cwebp.exe",
+        "entry": "libwebp-1.6.0-windows-x64/bin/cwebp.exe"
+      },
+      {
+        "target": "webp/dwebp.exe",
+        "entry": "libwebp-1.6.0-windows-x64/bin/dwebp.exe"
+      }
+    ],
+    "url": "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0-windows-x64.zip",
+    "id": "libwebp",
+    "version": "1.6.0-windows-x64",
+    "archive": "libwebp-1.6.0-windows-x64.zip",
+    "sha256": "48886f506b21f62e4661f0f4cbfca19800897c385128e8902542d29a950c93f1"
+  },
+  {
+    "id": "pdfsharp-license",
+    "version": "license",
+    "url": "https://raw.githubusercontent.com/empira/PDFsharp/v6.2.4/LICENSE",
+    "archive": "pdfsharp-license.txt",
+    "sha256": "3c648a5072bd7f7386ca28687780489a708a57ed75f13927bc16dd3e34af3bf7",
+    "plain": true,
+    "files": [
+      {
+        "target": "licenses/PDFsharp.txt"
+      }
+    ]
+  },
+  {
+    "id": "webp-license",
+    "version": "license",
+    "url": "https://raw.githubusercontent.com/webmproject/libwebp/v1.6.0/COPYING",
+    "archive": "webp-license.txt",
+    "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+    "plain": true,
+    "files": [
+      {
+        "target": "licenses/WebP.txt"
+      }
+    ]
+  },
+  {
+    "id": "webp-patents",
+    "version": "license",
+    "url": "https://raw.githubusercontent.com/webmproject/libwebp/v1.6.0/PATENTS",
+    "archive": "webp-patents.txt",
+    "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c",
+    "plain": true,
+    "files": [
+      {
+        "target": "licenses/WebP-PATENTS.txt"
+      }
+    ]
+  }
+]

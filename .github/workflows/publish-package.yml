@@ -93,7 +93,12 @@ jobs:
                 $stream = $entry.Open()
                 try { $expected = [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '') }
                 finally { $stream.Dispose() }
-                $installedFile = Join-Path $verifyRoot ($env:PACKAGE_ID + '.' + $env:PACKAGE_VERSION + '/tools/Snapline/' + $entry.Name)
+                $entryPath = $entry.FullName.Replace('\', '/')
+                if (-not $entryPath.StartsWith('Snapline/', [StringComparison]::Ordinal)) { throw 'Unexpected portable archive root.' }
+                $relative = $entryPath.Substring('Snapline/'.Length)
+                $installedRoot = [IO.Path]::GetFullPath((Join-Path $verifyRoot ($env:PACKAGE_ID + '.' + $env:PACKAGE_VERSION + '/tools/Snapline')))
+                $installedFile = [IO.Path]::GetFullPath((Join-Path $installedRoot $relative))
+                if (-not $installedFile.StartsWith($installedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Portable path escaped its directory.' }
                 if ((Get-FileHash -LiteralPath $installedFile -Algorithm SHA256).Hash -cne $expected) { throw ('Published package file differs: ' + $entry.Name) }
               }
             } finally { $hasher.Dispose(); $archive.Dispose() }

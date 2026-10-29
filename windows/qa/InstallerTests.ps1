@@ -31,6 +31,11 @@ function Uninstall {
     $deadline = [DateTime]::UtcNow.AddSeconds(15)
     while ((Test-Path -LiteralPath (Join-Path $installDir 'Snapline.exe')) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
     Check (-not (Test-Path -LiteralPath (Join-Path $installDir 'Snapline.exe'))) 'Uninstall removes program executable'
+    $remaining = @(Get-ChildItem -LiteralPath (Join-Path $Payload 'Converters') -File -Recurse | Where-Object {
+        $relative = $_.FullName.Substring($Payload.TrimEnd('\').Length + 1)
+        Test-Path -LiteralPath (Join-Path $installDir $relative)
+    })
+    Check ($remaining.Count -eq 0) 'Uninstall removes each converter file owned by this package'
 }
 function VerifyShortcut([string]$path, [string]$target) {
     Check (Test-Path -LiteralPath $path) ('Shortcut exists: ' + [System.IO.Path]::GetFileName($path))
@@ -66,10 +71,13 @@ Check ($productionText -match 'requestedExecutionLevel[^>]+asInvoker') 'Producti
 Check (-not $productionText.Contains($Root) -and -not [Text.Encoding]::Unicode.GetString($productionBytes).Contains($Root)) 'Production installer excludes QA directory redirection'
 
 Install
-foreach ($file in Get-ChildItem -LiteralPath $Payload -File) {
-    $installedPath = Join-Path $installDir $file.Name
-    Check ((Get-FileHash -LiteralPath $installedPath).Hash -eq (Get-FileHash -LiteralPath $file.FullName).Hash) ('Installed payload matches verified portable file: ' + $file.Name)
+foreach ($file in Get-ChildItem -LiteralPath $Payload -File -Recurse) {
+    $relative = $file.FullName.Substring($Payload.TrimEnd('\').Length + 1)
+    $installedPath = Join-Path $installDir $relative
+    Check ((Get-FileHash -LiteralPath $installedPath).Hash -eq (Get-FileHash -LiteralPath $file.FullName).Hash) ('Installed payload matches verified portable file: ' + $relative)
 }
+$converterNote = Join-Path $installDir 'Converters\keep-user-note.txt'
+Set-Content -LiteralPath $converterNote -Value 'Generated unrelated test note; preserve it.' -Encoding UTF8
 Check (Test-Path -LiteralPath (Join-Path $installDir 'INSTALLER.zh-CN.md')) 'Installer usage and attribution guide is included'
 VerifyShortcut $desktopLink (Join-Path $installDir 'Snapline.exe')
 VerifyShortcut $menuLink (Join-Path $installDir 'Snapline.exe')
@@ -138,6 +146,7 @@ Uninstall
 Check (-not (Test-Path -LiteralPath $desktopLink)) 'Uninstall removes the desktop shortcut it created'
 Check (-not (Test-Path -LiteralPath $menuLink)) 'Uninstall removes its Start Menu shortcuts'
 Check (Test-Path -LiteralPath $foreignFile) 'Uninstall preserves unrelated files inside the installation directory'
+Check (Test-Path -LiteralPath $converterNote) 'Uninstall preserves unrelated notes inside the converter directory'
 Check ((Get-FileHash -LiteralPath $settingsPath).Hash -eq $settingsHash -and (Get-FileHash -LiteralPath $imagePath).Hash -eq $imageHash) 'Uninstall preserves existing screenshot data and settings'
 Check (-not (Test-Path -LiteralPath $testAppKey)) 'Uninstall removes its own application registration'
 Check (-not (Get-ItemProperty -LiteralPath $testRunKey -Name Snapline -ErrorAction SilentlyContinue).Snapline) 'Uninstall removes startup pointing to the installed executable'

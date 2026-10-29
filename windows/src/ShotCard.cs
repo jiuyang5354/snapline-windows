@@ -17,6 +17,9 @@ namespace Snapline
         private readonly Controller controller;
         private readonly RotateTransform rotation;
         private readonly ScaleTransform scale = new ScaleTransform(1, 1);
+        private readonly TranslateTransform ropeOffset = new TranslateTransform();
+        private readonly RotateTransform ropeTilt = new RotateTransform();
+        internal readonly PhysicalCard Physics;
         private readonly Border badge;
         private readonly Button remove;
         private readonly DispatcherTimer hold;
@@ -29,6 +32,7 @@ namespace Snapline
             Shot = shot;
             this.controller = controller;
             Width = 160;
+            shot.GetThumbnail();
             double fit = Math.Min(136.0 / shot.Thumbnail.Width, 104.0 / shot.Thumbnail.Height);
             double photoWidth = shot.Thumbnail.Width * fit;
             double photoHeight = shot.Thumbnail.Height * fit;
@@ -40,7 +44,10 @@ namespace Snapline
             var transforms = new TransformGroup();
             transforms.Children.Add(scale);
             transforms.Children.Add(rotation);
+            transforms.Children.Add(ropeTilt);
+            transforms.Children.Add(ropeOffset);
             RenderTransform = transforms;
+            Physics = new PhysicalCard(this, ropeTilt, null);
             AutomationProperties.SetName(this, "截图 " + System.IO.Path.GetFileName(shot.Path));
             ToolTip = "单击 / C 复制 · 双击预览 · 长按 / A 编辑 · D 或 Delete 取下 · 拖出使用";
 
@@ -103,7 +110,6 @@ namespace Snapline
             ContextMenu = Menu();
             ContextMenu.Opened += delegate { controller.Busy = true; };
             ContextMenu.Closed += delegate { controller.Busy = false; };
-            Sway(10);
         }
 
         private ContextMenu Menu()
@@ -113,6 +119,7 @@ namespace Snapline
             Add(menu, "打开预览", delegate { controller.Open(Shot); });
             Add(menu, "用画图编辑", delegate { controller.Edit(Shot); });
             Add(menu, "另存为…", delegate { controller.Export(Shot); });
+            Add(menu, "转格式 / PDF…", delegate { Dispatcher.BeginInvoke(new Action(delegate { controller.OpenFileTools(FileTool.Convert, new[] { Shot.Path }); })); });
             Add(menu, "在文件夹中显示", delegate { controller.Reveal(Shot); });
             menu.Items.Add(new Separator());
             Add(menu, "取下截图", delegate { controller.Discard(Shot); });
@@ -164,12 +171,41 @@ namespace Snapline
             var position = e.GetPosition(controller.Line);
             if (Math.Abs(position.X - down.Value.X) < SystemParameters.MinimumHorizontalDragDistance &&
                 Math.Abs(position.Y - down.Value.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+            var origin = down.Value;
             click.Stop();
             EndPress();
             controller.Busy = true;
             Opacity = 0.45;
-            try { DragDrop.DoDragDrop(this, controller.Data(Shot), DragDropEffects.Copy | DragDropEffects.Move); }
-            finally { Opacity = 1; controller.Busy = false; controller.Store.Prune(); }
+            controller.Files.Window.ExternalDragStarted();
+            bool released = false, canceled = false;
+            QueryContinueDragEventHandler query = delegate(object source, QueryContinueDragEventArgs args) {
+                if (args.EscapePressed || args.Action == DragAction.Cancel) { canceled = true; return; }
+                if ((args.KeyStates & DragDropKeyStates.LeftMouseButton) == 0) released = true;
+            };
+            QueryContinueDrag += query;
+            controller.Line.BeginRopeDrag(this, origin);
+            try {
+                // Receivers get a copy, leaving the original available on the line.
+                var result = DragDrop.DoDragDrop(this, controller.Data(Shot), DragDropEffects.Copy);
+                CompleteDrag(result, released, canceled, controller.Line.PixelBounds.Contains(Native.Cursor()));
+            }
+            finally {
+                QueryContinueDrag -= query;
+                controller.Line.EndRopeDrag();
+                controller.Files.Window.ExternalDragEnded(); Opacity = 1; controller.Busy = false; controller.Store.Prune();
+            }
+        }
+
+        internal void CompleteDrag(DragDropEffects result, bool released, bool canceled, bool overLine)
+        {
+            if (controller.Store.Settings.RemoveOnBlankDrop && result == DragDropEffects.None && released && !canceled && !overLine)
+                controller.Detach(Shot);
+        }
+
+        internal void FollowRope(Vector offset)
+        {
+            ropeOffset.X = offset.X; ropeOffset.Y = offset.Y;
+            Physics.Pull(-offset.X * .4);
         }
 
         private void EndPress()
@@ -192,12 +228,7 @@ namespace Snapline
         internal void Sway(double amount)
         {
             if (!SystemParameters.ClientAreaAnimation || down != null) return;
-            var animation = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromSeconds(1.2) };
-            double[] angles = { amount, -amount * 0.5, amount * 0.25, -amount * 0.1, 0 };
-            for (int i = 0; i < angles.Length; i++)
-                animation.KeyFrames.Add(new EasingDoubleKeyFrame(Shot.Tilt + angles[i], KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(i * 300)),
-                    new SineEase { EasingMode = EasingMode.EaseInOut }));
-            rotation.BeginAnimation(RotateTransform.AngleProperty, animation);
+            Physics.Kick(amount);
         }
 
         internal void Copied()

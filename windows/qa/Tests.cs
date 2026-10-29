@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -48,6 +48,17 @@ namespace Snapline
         [STAThread]
         private static int Main(string[] args)
         {
+            if (args.Length == 2 && args[0] == "--shot-drag") return ShotDragTests.Run(Path.GetFullPath(args[1]));
+            if (args.Length == 2 && args[0] == "--file-tools") return FileToolsTests.Run(Path.GetFullPath(args[1]));
+            if (args.Length == 2 && args[0] == "--shelf") return FileShelfTests.Run(Path.GetFullPath(args[1]));
+            if (args.Length == 2 && args[0] == "--shelf-drag") return FileShelfTests.RunDrag(Path.GetFullPath(args[1]));
+            if (args.Length == 2 && args[0] == "--shelf-source") return FileShelfTests.RunSource(Path.GetFullPath(args[1]));
+            if (args.Length == 2 && args[0] == "--smoke") {
+                var smokeApp = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                try { Directory.CreateDirectory(args[1]); SmokeExecutable(Path.GetFullPath(args[1])); File.WriteAllLines(Path.Combine(args[1], "executable-results.txt"), checks); return 0; }
+                catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+                finally { smokeApp.Shutdown(); }
+            }
             if (args.Length == 2 && args[0] == "--clipboard") return CheckClipboardSafety(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--inbox") return CheckInboxLocation(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--settings") return CheckSettingsOnly(Path.GetFullPath(args[1]));
@@ -126,7 +137,7 @@ namespace Snapline
                 restored.Prune();
                 Check(restored.Items.Count == 0, "Files moved away disappear from the line");
                 for (int i = 0; i < 14; i++) restored.AddBitmap(Fixture(300 + i, 220, i));
-                Check(restored.Items.Count == 12 && Directory.GetFiles(restored.Inbox, "*.png").Length == 14, "Capacity limit retains older PNG files");
+                Check(restored.Items.Count == 14 && Directory.GetFiles(restored.Inbox, "*.png").Length == 14, "New screenshot groups retain older records and PNG files");
                 restored.Clear();
                 Check(restored.Items.Count == 0 && Directory.GetFiles(restored.Inbox, "*.png").Length == 14, "Clear takes down cards without deleting captures");
                 var transparent = BitmapSource.Create(2, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 10, 20, 30, 0, 40, 50, 60, 0 }, 8);
@@ -410,11 +421,11 @@ namespace Snapline
                 "The executable targets .NET Framework 4.8 and negotiates HTTPS using operating-system TLS defaults");
             var package = Encoding.UTF8.GetBytes("PK generated update package fixture");
             string stable = ReleaseJson("v1.3.0", package, false, false);
-            string preview = ReleaseJson("v1.5.0", package, false, true);
+            string preview = ReleaseJson("v1.6.0", package, false, true);
             string draft = ReleaseJson("v8.0.0", package, true, false);
             byte[] json = Encoding.UTF8.GetBytes("[" + stable + "," + draft + "," + preview + "]");
             var release = Updates.Parse(json, Updates.CurrentVersion);
-            Check(release.Tag == "v1.5.0" && release.Prerelease, "Update checks select the highest published version including prereleases, skipping drafts");
+            Check(release.Tag == "v1.6.0" && release.Prerelease, "Update checks select the highest published version including prereleases, skipping drafts");
             Check(Updates.Parse(json, new Version(1, 5, 0)) == null, "Equal and older release versions do not prompt for updates");
             Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + stable.Replace("github.com/jiuyang5354", "github.com/other-owner") + "]"), Updates.CurrentVersion) == null,
                 "A package URL outside the publishing repository is rejected");
@@ -435,7 +446,7 @@ namespace Snapline
             using (var updater = new Updates(handler))
             {
                 var found = updater.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
-                Check(found.Tag == "v1.5.0" && handler.Headers, "HTTP update pipeline sends an app user-agent without an account token");
+                Check(found.Tag == "v1.6.0" && handler.Headers, "HTTP update pipeline sends an app user-agent without an account token");
                 string destination = Path.Combine(root, "更新 包.zip");
                 updater.DownloadAsync(found, destination, null, CancellationToken.None).GetAwaiter().GetResult();
                 Check(File.ReadAllBytes(destination).SequenceEqual(package), "Verified downloads arrive intact at a Unicode destination");
@@ -997,16 +1008,16 @@ namespace Snapline
             Check(!Updates.InstalledAt(Path.Combine(registered, "Snapline.exe"), null) &&
                 !Updates.InstalledAt(Path.Combine(registered, "Snapline.exe"), "relative-directory"), "Missing or relative installation registration does not enable EXE update mode");
             var package = Encoding.UTF8.GetBytes("MZ generated installer fixture; never executed");
-            string both = "[" + ReleaseJson("v1.5.0", package, false, true, true) + "]";
+            string both = "[" + ReleaseJson("v1.6.0", package, false, true, true) + "]";
             var json = Encoding.UTF8.GetBytes(both);
             var release = Updates.Parse(json, Updates.CurrentVersion, true);
-            Check(release != null && release.IsInstaller && release.Package.Name == "Snapline-Windows-Setup-v1.5.0.exe",
+            Check(release != null && release.IsInstaller && release.Package.Name == "Snapline-Windows-Setup-v1.6.0.exe",
                 "Installed clients select the EXE installer from a feed containing both update formats");
-            Check(Updates.Parse(json, new Version(1, 3, 2)).Package.Name == "Snapline-Windows-v1.5.0.zip",
+            Check(Updates.Parse(json, new Version(1, 3, 2)).Package.Name == "Snapline-Windows-v1.6.0.zip",
                 "Portable and legacy ZIP clients retain a compatible package in the same update feed");
-            Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + ReleaseJson("v1.5.0", package, false, true) + "]"), Updates.CurrentVersion, true) == null,
+            Check(Updates.Parse(Encoding.UTF8.GetBytes("[" + ReleaseJson("v1.6.0", package, false, true) + "]"), Updates.CurrentVersion, true) == null,
                 "Installed clients never silently substitute a ZIP when the verified installer is missing");
-            Check(Updates.Parse(Encoding.UTF8.GetBytes(both.Replace("/Snapline-Windows-Setup-v1.5.0.exe", "/other.exe")), Updates.CurrentVersion, true) == null,
+            Check(Updates.Parse(Encoding.UTF8.GetBytes(both.Replace("/Snapline-Windows-Setup-v1.6.0.exe", "/other.exe")), Updates.CurrentVersion, true) == null,
                 "Installer download URLs must match the exact release asset in the publishing repository");
             Check(Updates.Parse(Encoding.UTF8.GetBytes(both.Replace("sha256:", "sha1:")), Updates.CurrentVersion, true) == null,
                 "Installer assets without a complete SHA-256 digest are rejected");
@@ -1345,151 +1356,7 @@ namespace Snapline
             DialogAction(controller, delegate(SettingsWindow dialog) { SaveSettingsRender(dialog, Path.Combine(output, "capture-hotkey-dialog.png")); });
         }
 
-        private static int CheckSettingsMaterials(string output)
-        {
-            Directory.CreateDirectory(output);
-            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-            Controller controller = null; SettingsWindow dialog = null;
-            try {
-                string root = Path.Combine(output, "material-run-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
-                var store = new ImageStore(root);
-                store.Settings.ListenClipboard = false; store.Settings.CollectionPaused = true; store.Settings.AutoCheckUpdates = false;
-                store.Settings.HotkeyKey = FreeHotkey(7); store.Settings.HotkeyModifiers = 7;
-                store.Settings.CaptureHotkeyKey = FreeHotkey(6); store.Settings.CaptureHotkeyModifiers = 6; store.Save();
-                controller = new Controller(root, false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
-                controller.Busy = true;
-                dialog = new SettingsWindow(controller) { ShowActivated = false };
-                dialog.Show(); Pump(500);
-                var screen = Forms.Screen.FromHandle(new WindowInteropHelper(dialog).Handle);
-                double scale = Native.Scale(screen);
-                var backdrop = new RenderTargetBitmap(screen.Bounds.Width, screen.Bounds.Height, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
-                var landscape = new DrawingVisual();
-                using (var dc = landscape.RenderOpen()) {
-                    double w = screen.Bounds.Width / scale, h = screen.Bounds.Height / scale;
-                    dc.DrawRectangle(new LinearGradientBrush(Color.FromRgb(202, 215, 217), Color.FromRgb(141, 166, 154), 90), null, new Rect(0, 0, w, h));
-                    dc.PushTransform(new ScaleTransform(w / 1600, h / 1000));
-                    foreach (var hill in new[] {
-                        new[] { "#B4C5C1", "M0,480 L200,365 L330,180 L520,370 L750,135 L1000,405 L1180,235 L1380,460 L1600,400 L1600,720 L0,720 Z" },
-                        new[] { "#8FA9A0", "M0,600 L160,470 L320,540 L490,360 L730,570 L1000,350 L1300,520 L1480,440 L1600,570 L1600,800 L0,800 Z" },
-                        new[] { "#708F83", "M0,780 L190,655 L420,705 L690,585 L930,720 L1140,640 L1450,560 L1600,700 L1600,1000 L0,1000 Z" } })
-                        dc.DrawGeometry(new SolidColorBrush((Color)ColorConverter.ConvertFromString(hill[0])), null, Geometry.Parse(hill[1]));
-                    dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(154, 177, 169)), null, new Rect(0, 775, 1600, 225));
-                    dc.DrawGeometry(new SolidColorBrush(Color.FromRgb(65, 90, 79)), null, Geometry.Parse("M0,715 L170,720 L305,1000 L0,1000 Z"));
-                    dc.Pop();
-                }
-                backdrop.Render(landscape); backdrop.Freeze();
-                dialog.Glass.SetBackdrop(new GlassBackdrop(backdrop, scale), new Rect(screen.Bounds.Left / scale, screen.Bounds.Top / scale, screen.Bounds.Width / scale, screen.Bounds.Height / scale));
-                dialog.UpdateLayout(); Pump(100);
-                var glassImage = new RenderTargetBitmap((int)Math.Ceiling(dialog.Glass.ActualWidth * 1.5), (int)Math.Ceiling(dialog.Glass.ActualHeight * 1.5), 144, 144, PixelFormats.Pbgra32);
-                glassImage.Render(dialog.Glass);
-                var glassPixels = new byte[glassImage.PixelWidth * glassImage.PixelHeight * 4];
-                glassImage.CopyPixels(glassPixels, glassImage.PixelWidth * 4, 0);
-                int center = ((glassImage.PixelHeight / 2) * glassImage.PixelWidth + glassImage.PixelWidth / 2) * 4;
-                Check(glassPixels[center + 3] == 255 && glassPixels[3] == 0, "Glass paints the full backdrop center and preserves transparent rounded corners");
-                Check(glassPixels[center] < 240 && glassPixels[center + 2] < 240, "The glass center retains landscape color instead of turning into a white rectangle");
-                Point beforeMove = dialog.Glass.SampleOrigin;
-                int mapBuilds = dialog.Glass.MapBuilds;
-                var zeroAlpha = new GlassBackdrop(BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 44, 55, 66, 0 }, 4), 1).Sample(new Rect(0, 0, 1, 1));
-                var zeroPixels = new byte[4]; zeroAlpha.CopyPixels(zeroPixels, 4, 0);
-                Check(zeroPixels.SequenceEqual(new byte[] { 44, 55, 66, 255 }), "Desktop sampling repairs zero-alpha screen pixels without changing their color");
-                Check(dialog.Materials.Count == 22 && dialog.Materials.Where(m => m.IsVisible).All(m => m.Frames > 0), "Native metal textures render on all visible controls");
-                foreach (string name in new[] { "NavCapture", "CollectToggle", "CancelSettings", "SaveSettings" }) {
-                    var control = dialog.Part<Control>(name);
-                    Check(control.InputHitTest(new Point(4, control.ActualHeight / 2)) != null &&
-                        control.InputHitTest(new Point(control.ActualWidth - 4, control.ActualHeight / 2)) != null,
-                        name + " accepts pointer input at both capsule ends, outside its text or thumb");
-                }
-                foreach (string page in new[] { "General", "Capture", "Keys", "Storage", "About" }) {
-                    dialog.ShowPage(page); dialog.UpdateLayout(); Pump(100);
-                    var bounds = dialog.Part<Grid>("Pages");
-                    Check(Descendants(dialog.Part<StackPanel>(page + "Page")).OfType<FrameworkElement>().Where(el => el is TextBlock || el is Button || el is CheckBox || el is TextBox).All(el => {
-                        var box = el.TransformToAncestor(bounds).TransformBounds(new Rect(el.RenderSize));
-                        return box.Left >= -1 && box.Top >= -1 && box.Right <= bounds.ActualWidth + 1 && box.Bottom <= bounds.ActualHeight + 1;
-                    }), "Native glass " + page + " page keeps labels and controls inside the content area");
-                    SaveSettingsRender(dialog, Path.Combine(output, "native-settings-" + page.ToLowerInvariant() + ".png"));
-                }
-                dialog.ShowPage("General"); dialog.UpdateLayout();
-                var surface = dialog.Materials.First(m => m.ActualWidth > 100 && m.ActualHeight > 35);
-                var textures = LiquidMetal.Render(140, 41, 3.5, new Point(70, 20.5), false, false, -1);
-                var pixels = new byte[textures[0].PixelWidth * textures[0].PixelHeight * 4]; textures[0].CopyPixels(pixels, textures[0].PixelWidth * 4, 0);
-                Check(pixels[3] < 24 && pixels[((textures[0].PixelHeight / 2) * textures[0].PixelWidth + textures[0].PixelWidth / 2) * 4 + 3] == 255,
-                    "Metal keeps exterior padding translucent and its readable center opaque");
-                Check(Enumerable.Range(0, pixels.Length / 4).All(i => pixels[i * 4] <= pixels[i * 4 + 3] && pixels[i * 4 + 1] <= pixels[i * 4 + 3] && pixels[i * 4 + 2] <= pixels[i * 4 + 3]),
-                    "Native metal pixels use valid premultiplied alpha");
-                var hovered = LiquidMetal.Render(140, 41, 4.1, new Point(100, 16), true, false, .2);
-                Check(ImageStore.Digest(textures[0]) != ImageStore.Digest(hovered[0]) && ImageStore.Digest(textures[1]) != ImageStore.Digest(hovered[1]), "Hover and ripple change the native metal body and crisp rim pixels");
-                var glowPixels = new byte[textures[2].PixelWidth * textures[2].PixelHeight * 4]; textures[2].CopyPixels(glowPixels, textures[2].PixelWidth * 4, 0);
-                int haloPixel = (8 * textures[0].PixelWidth + textures[0].PixelWidth / 2) * 4;
-                Check(glowPixels[haloPixel + 3] > 0 && pixels[haloPixel + 3] > 0 && pixels[haloPixel + 3] < 255,
-                    "The composited metal halo stays visible four pixels outside the capsule without becoming an opaque border");
-                foreach (string background in new[] { "light", "dark", "text" }) {
-                    var fixture = new DrawingVisual();
-                    using (var dc = fixture.RenderOpen()) {
-                        double w = screen.Bounds.Width / scale, h = screen.Bounds.Height / scale;
-                        bool light = background == "light";
-                        dc.DrawRectangle(new SolidColorBrush(light ? Color.FromRgb(232, 237, 240) : Color.FromRgb(30, 34, 38)), null, new Rect(0, 0, w, h));
-                        if (background == "text") {
-                            for (int y = 0; y < h; y += 38) dc.DrawText(new FormattedText("BACKGROUND TEXT · 0123456789 · SNAPLINE SETTINGS", System.Globalization.CultureInfo.InvariantCulture,
-                                FlowDirection.LeftToRight, new Typeface("Segoe UI"), 18, Brushes.White, scale), new Point(60, y));
-                            // Eight-pixel stems reproduce the fine high-contrast
-                            // details behind the settings window in the report.
-                            for (int x = 0; x < w; x += 16) dc.DrawRectangle(Brushes.White, null, new Rect(x, 0, 8, h));
-                        } else {
-                            dc.DrawGeometry(new SolidColorBrush(light ? Color.FromRgb(148, 182, 186) : Color.FromRgb(41, 91, 94)), null,
-                                Geometry.Parse("M0,450 L420,160 L900,480 L1600,180 L1600,1000 L0,1000 Z"));
-                        }
-                    }
-                    var image = new RenderTargetBitmap(screen.Bounds.Width, screen.Bounds.Height, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
-                    image.Render(fixture); image.Freeze();
-                    dialog.Glass.SetBackdrop(new GlassBackdrop(image, scale), new Rect(screen.Bounds.Left / scale, screen.Bounds.Top / scale, screen.Bounds.Width / scale, screen.Bounds.Height / scale));
-                    Pump(100);
-                    SaveSettingsRender(dialog, Path.Combine(output, "native-settings-" + background + "-background.png"));
-                    if (background == "text") {
-                        var rendered = new RenderTargetBitmap((int)Math.Ceiling(dialog.Glass.ActualWidth), (int)Math.Ceiling(dialog.Glass.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-                        rendered.Render(dialog.Glass);
-                        var detail = new byte[rendered.PixelWidth * rendered.PixelHeight * 4]; rendered.CopyPixels(detail, rendered.PixelWidth * 4, 0);
-                        int row = rendered.PixelHeight / 2, min = 255, max = 0;
-                        for (int x = rendered.PixelWidth / 2 - 32; x < rendered.PixelWidth / 2 + 32; x++) { int value = detail[(row * rendered.PixelWidth + x) * 4 + 1]; min = Math.Min(min, value); max = Math.Max(max, value); }
-                        Check(max - min < 12, "Frosted glass suppresses fine high-contrast background detail below twelve color levels");
-                        Check(detail[(row * rendered.PixelWidth + 28) * 4 + 3] == 255,
-                            "Clipping after blur preserves opaque glass beside the bevel instead of a translucent haze");
-                    }
-                }
-                dialog.Glass.SetBackdrop(new GlassBackdrop(backdrop, scale), new Rect(screen.Bounds.Left / scale, screen.Bounds.Top / scale, screen.Bounds.Width / scale, screen.Bounds.Height / scale));
-                beforeMove = dialog.Glass.SampleOrigin; mapBuilds = dialog.Glass.MapBuilds;
-                var performance = Stopwatch.StartNew();
-                for (int n = 0; n < 10; n++) LiquidMetal.Render(140, 41, 4 + n / 30.0, new Point(100, 16), true, false, .2 + n / 30.0);
-                performance.Stop();
-                Console.WriteLine("Metal 140x41 render: " + (performance.Elapsed.TotalMilliseconds / 10).ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + " ms/frame");
-                File.WriteAllBytes(Path.Combine(output, "metal-idle.png"), ImageStore.Png(textures[0]));
-                File.WriteAllBytes(Path.Combine(output, "metal-hover.png"), ImageStore.Png(hovered[0]));
-                var nav = dialog.Part<RadioButton>("NavGeneral");
-                dialog.Activate(); nav.Focus(); dialog.SetInputMode(true); Pump(100);
-                Check(dialog.Materials.Any(m => m.FocusVisible), "Keyboard interaction shows a native focus outline");
-                SaveSettingsRender(dialog, Path.Combine(output, "native-keyboard-focus.png"));
-                dialog.SetInputMode(false); Pump(100);
-                Check(!dialog.Materials.Any(m => m.FocusVisible) && nav.IsKeyboardFocused, "Mouse input removes the outline while preserving the same focused native control");
-                Pump(2700);
-                Check(!dialog.Materials.Any(m => m.Animating), "Native material animation stops after keyboard focus returns to pointer input");
-                int frames = dialog.Materials.Sum(m => m.Frames); Pump(350);
-                Check(frames == dialog.Materials.Sum(m => m.Frames), "Idle settings do not continuously regenerate metal textures");
-                var dragClock = Stopwatch.StartNew();
-                double startLeft = dialog.Left;
-                for (int n = 0; n < 80; n++) { dialog.Left = startLeft + n % 20; dialog.Glass.Update(); }
-                dragClock.Stop();
-                Console.WriteLine("Glass move update: " + (dragClock.Elapsed.TotalMilliseconds / 80).ToString("F3", CultureInfo.InvariantCulture) + " ms/update");
-                Check(dragClock.Elapsed.TotalMilliseconds / 80 < 4 && dialog.Glass.MapBuilds == mapBuilds,
-                    "Repeated moves stay below four milliseconds per CPU update and reuse the same optical map");
-                dialog.Left += 24; dialog.Glass.Update(); Pump(100);
-                SaveSettingsRender(dialog, Path.Combine(output, "native-settings-moved.png"));
-                Check(beforeMove != dialog.Glass.SampleOrigin && dialog.Glass.MapBuilds == mapBuilds, "Moving settings changes background coordinates without rebuilding optical pixels");
-                Console.WriteLine("PASS " + checks.Count + " native material checks.");
-                File.WriteAllLines(Path.Combine(output, "material-results.txt"), checks);
-                return 0;
-            }
-            catch (Exception ex) { Console.Error.WriteLine(ex.GetType().Name + ": " + ex.Message + "\n" + ex.StackTrace); return 1; }
-            finally { if (dialog != null) dialog.Close(); if (controller != null) controller.Dispose(); app.Shutdown(); }
-        }
+        private static int CheckSettingsMaterials(string output) { return SettingsFeedbackTests.Run(output); }
 
         private static void DialogAction(Controller controller, Action<SettingsWindow> action)
         {
@@ -1745,7 +1612,7 @@ namespace Snapline
                 var live = new ImageStore(liveRoot);
                 live.Settings.ListenClipboard = false; live.Settings.AutoCheckUpdates = false; live.Settings.WatchFolder = null;
                 live.Settings.HotkeyKey = FreeHotkey(7); live.Settings.HotkeyModifiers = 7;
-                live.Settings.CaptureHotkeyKey = FreeHotkey(6); live.Settings.CaptureHotkeyModifiers = 6; live.Save();
+                live.Settings.CaptureHotkeyKey = FreeHotkey(6); live.Settings.CaptureHotkeyModifiers = 6; live.Settings.ClearHotkeyKey = FreeHotkey(5); live.Settings.ClearHotkeyModifiers = 5; live.Save();
                 controller = new Controller(liveRoot, true, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
                 controller.Busy = true;
                 string liveInbox = Path.Combine(root, "监听 收件夹");
@@ -1771,8 +1638,8 @@ namespace Snapline
                     var labelBox = label.TransformToAncestor(row).TransformBounds(new Rect(label.RenderSize));
                     var buttonBox = buttons.TransformToAncestor(row).TransformBounds(new Rect(buttons.RenderSize));
                     Check(label.MaxWidth == 300 && label.TextTrimming == TextTrimming.CharacterEllipsis && labelBox.Right <= buttonBox.Left &&
-                        buttonBox.Right <= row.ActualWidth + 1 && Descendants(dialog.Part<Button>("ChooseInbox")).OfType<LiquidMetal>().Any(material => material.Frames > 0),
-                        "Inbox path and both buttons fit the row; the new button has liquid metal material");
+                        buttonBox.Right <= row.ActualWidth + 1 && dialog.Part<Button>("ChooseInbox").InputHitTest(new Point(4, 10)) != null,
+                        "Inbox path and both buttons fit the row; the new button accepts input");
                     SaveSettingsRender(dialog, Path.Combine(output, "settings-storage.png"));
                     dialog.Part<Button>("CancelSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 });
@@ -1811,7 +1678,7 @@ namespace Snapline
                 var store = new ImageStore(root);
                 store.Settings.ListenClipboard = false; store.Settings.CollectionPaused = true; store.Settings.AutoCheckUpdates = false;
                 store.Settings.HotkeyKey = FreeHotkey(7); store.Settings.HotkeyModifiers = 7;
-                store.Settings.CaptureHotkeyKey = FreeHotkey(6); store.Settings.CaptureHotkeyModifiers = 6; store.Save();
+                store.Settings.CaptureHotkeyKey = FreeHotkey(6); store.Settings.CaptureHotkeyModifiers = 6; store.Settings.ClearHotkeyKey = FreeHotkey(5); store.Settings.ClearHotkeyModifiers = 5; store.Save();
                 controller = new Controller(root, false, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
                 controller.Busy = true;
                 controller.Line.Reveal(Forms.Screen.FromPoint(Native.Cursor())); Pump(80); controller.Line.Hide();
@@ -1833,12 +1700,12 @@ namespace Snapline
                 runValue = run == null ? null : run.GetValue("Snapline") as string;
             DialogAction(controller, delegate(SettingsWindow dialog) {
                 Check(dialog.Part<CheckBox>("StartupToggle").IsChecked == controller.StartupEnabled, "Settings reads actual startup state without enabling it");
-                var saveText = Descendants(dialog.Part<Button>("SaveSettings")).OfType<TextBlock>().First(block => block.Text == "保存");
-                Check(((SolidColorBrush)saveText.Foreground).Color == ((SolidColorBrush)Ui.Brush("Surface")).Color,
-                    "Save button renders light text on its dark surface");
+                var saveText = Descendants(dialog.Part<Button>("SaveSettings")).OfType<TextBlock>().First(block => block.Text == (string)dialog.Part<Button>("SaveSettings").Content);
+                Check(((SolidColorBrush)saveText.Foreground).Color == ((SolidColorBrush)dialog.View.FindResource("PrimaryText")).Color,
+                    "Save button renders the foreground specified by its active theme");
                 var closeText = Descendants(dialog.Part<Button>("CloseSettings")).OfType<TextBlock>().First();
                 Check(closeText.FontFamily.Source == "Segoe MDL2 Assets", "Close button renders using the real Windows icon font");
-                foreach (string page in new[] { "General", "Capture", "Keys", "Storage", "About" }) {
+                foreach (string page in new[] { "General", "Capture", "Keys", "Storage", "Shelf", "About" }) {
                     dialog.ShowPage(page); dialog.UpdateLayout();
                     var bounds = (Grid)dialog.View.FindName("Pages");
                     var content = dialog.Part<StackPanel>(page + "Page");

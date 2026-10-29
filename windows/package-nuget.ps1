@@ -20,7 +20,13 @@ $outputRoot = Join-Path $PSScriptRoot 'dist\nuget'
 $stageRoot = Join-Path $outputRoot ('stage-' + [guid]::NewGuid().ToString('N'))
 $portableRoot = Join-Path $stageRoot 'portable'
 New-Item -ItemType Directory -Force -Path $portableRoot | Out-Null
-$portableFiles = @('Snapline.exe', 'Snapline.exe.config', 'README.zh-CN.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md', 'QA.md', 'preview.png')
+$portableFiles = @('Snapline.exe', 'Snapline.exe.config', 'README.zh-CN.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md', 'QA.md', 'preview.png', 'PDF-TOOLS-PLAN.zh-CN.md')
+$dependencies = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'conversion-dependencies.lock.json') -Raw | ConvertFrom-Json
+foreach ($dependency in $dependencies) { foreach ($asset in $dependency.files) {
+    $portableFiles += 'Converters/' + $asset.target.Replace('\', '/')
+} }
+$portableFiles += @('Converters/licenses/QingIcon-LICENSE.txt', 'Converters/licenses/QingIcon-NOTICE.txt')
+if (@($portableFiles | Sort-Object -Unique).Count -ne $portableFiles.Count) { throw 'Duplicate portable file allowlist entry.' }
 try {
     $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $PortableZip).Path)
     try {
@@ -29,7 +35,10 @@ try {
         foreach ($name in $portableFiles) {
             $matchingEntries = @($files | Where-Object { $_.FullName.Replace('\', '/') -ceq ('Snapline/' + $name) })
             if ($matchingEntries.Count -ne 1) { throw ('Missing or duplicated portable file: ' + $name) }
-            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($matchingEntries[0], (Join-Path $portableRoot $name))
+            $destination = [IO.Path]::GetFullPath((Join-Path $portableRoot $name))
+            if (-not $destination.StartsWith($portableRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Portable file escaped its directory.' }
+            [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination)) | Out-Null
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($matchingEntries[0], $destination)
         }
     } finally { $archive.Dispose() }
     $exeVersion = [System.Reflection.AssemblyName]::GetAssemblyName((Join-Path $portableRoot 'Snapline.exe')).Version.ToString(3)

@@ -4,7 +4,7 @@ Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官�
 
 本 NuGet 包包含已发布的 Windows 便携程序，文件位于 `tools/Snapline/`。需要 **Windows 10 / 11 和 .NET Framework 4.8 或更高版本**。
 
-v1.4.11 对应软件包版本 `1.4.11-preview`，在 Office / WPS 中选中整个文本框或形状复制时不再收集附带的预览图；保留 v1.4.10 的原生格式筛选、失败提醒限频、位图内存优化、自定义收件夹与现有功能。真实 PowerPoint 操作待反馈者复测，完整改动与验证范围随包保留。
+v1.5.0 Beta 1 对应软件包版本 `1.5.0-preview`，包含侧边暂存架、截图分组、统一 PDF / 文件工具、WebP 与离线转换组件。请完整保留 `Converters` 及其中许可文件，WebP 需要 64 位 Windows。本版为预发布测试版，实际验证范围随包保留。
 
 ## 下载和运行
 

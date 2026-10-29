@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,11 +22,18 @@ namespace Snapline
         [DataMember] public uint CaptureHotkeyKey = Hotkey.DefaultCaptureKey;
         [DataMember] public uint CaptureHotkeyModifiers = Hotkey.DefaultModifiers;
         [DataMember] public bool CollectionPaused;
+        [DataMember] public string Appearance;
+        [DataMember] public bool RemoveOnBlankDrop = true;
+        [DataMember] public uint ClearHotkeyKey = Hotkey.DefaultClearKey;
+        [DataMember] public uint ClearHotkeyModifiers = Hotkey.DefaultModifiers;
         [DataMember] public bool AutoCheckUpdates = true;
         [DataMember] public bool IncludeCursor;
         [DataMember] public long UpdateCheckedUtcTicks;
         [DataMember] public string UpdateNotifiedTag;
         [DataMember] public string AnnouncementSeenVersion;
+        [DataMember] public bool FileShelfEnabled = true;
+        [DataMember] public bool FileShelfAnyApp;
+        [DataMember] public bool FileShelfKeepAfterDragOut;
 
         [OnDeserializing]
         private void HotkeyDefaults(StreamingContext context)
@@ -35,7 +42,11 @@ namespace Snapline
             HotkeyModifiers = Hotkey.DefaultModifiers;
             CaptureHotkeyKey = Hotkey.DefaultCaptureKey;
             CaptureHotkeyModifiers = Hotkey.DefaultModifiers;
+            ClearHotkeyKey = Hotkey.DefaultClearKey;
+            ClearHotkeyModifiers = Hotkey.DefaultModifiers;
             AutoCheckUpdates = true;
+            FileShelfEnabled = true;
+            RemoveOnBlankDrop = true;
         }
     }
 
@@ -44,12 +55,15 @@ namespace Snapline
         internal string Path;
         internal string Hash;
         internal BitmapSource Thumbnail;
+        internal int ThumbnailWidth, ThumbnailHeight;
+        internal BitmapSource GetThumbnail()
+        { return Thumbnail ?? (Thumbnail = ImageStore.Load(Path, ThumbnailWidth, ThumbnailHeight)); }
         internal double Tilt;
     }
 
     internal sealed class ImageStore
     {
-        internal const int MaxItems = 12;
+        internal const int ItemsPerGroup = 9;
         internal readonly List<Shot> Items = new List<Shot>();
         internal readonly string Root;
         internal readonly string DefaultInbox;
@@ -225,14 +239,14 @@ namespace Snapline
             {
                 if (existing.Hash == hash) return null;
                 existing.Hash = hash;
-                existing.Thumbnail = Load(path, thumbnailWidth, thumbnailHeight);
+                existing.Thumbnail = null;
+                existing.ThumbnailWidth = thumbnailWidth; existing.ThumbnailHeight = thumbnailHeight;
                 if (notify) Publish();
                 return existing;
             }
             if (Items.Any(item => item.Hash == hash)) return null;
-            var shot = new Shot { Path = path, Hash = hash, Thumbnail = Load(path, thumbnailWidth, thumbnailHeight), Tilt = random.NextDouble() * 5 - 2.5 };
+            var shot = new Shot { Path = path, Hash = hash, ThumbnailWidth = thumbnailWidth, ThumbnailHeight = thumbnailHeight, Tilt = random.NextDouble() * 5 - 2.5 };
             Items.Add(shot);
-            while (Items.Count > MaxItems) Items.RemoveAt(0);
             if (notify) Publish();
             return shot;
         }
@@ -254,11 +268,22 @@ namespace Snapline
                     Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
                     Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin,
                     Microsoft.VisualBasic.FileIO.UICancelOption.ThrowException);
+            int index = Items.IndexOf(shot);
             Items.Remove(shot);
-            Publish();
+            try { Publish(); }
+            catch {
+                if (!recycle && index >= 0) { Items.Insert(index, shot); Settings.Paths = Items.Select(item => item.Path).ToList(); }
+                throw;
+            }
         }
 
-        internal void Clear() { Items.Clear(); Publish(); }
+        internal void Clear()
+        {
+            var previous = Items.ToArray();
+            Items.Clear();
+            try { Publish(); }
+            catch { Items.AddRange(previous); Settings.Paths = Items.Select(item => item.Path).ToList(); throw; }
+        }
 
         internal void Prune()
         {
@@ -286,6 +311,15 @@ namespace Snapline
                     System.Threading.Thread.Sleep(80);
                 }
             }
+        }
+
+        internal void RemapPaths(IDictionary<string, string> changes)
+        {
+            var previous = Items.Select(item => item.Path).ToArray();
+            foreach (var item in Items) { string path; if (changes.TryGetValue(item.Path, out path)) item.Path = path; }
+            try { Save(); }
+            catch { for (int i = 0; i < Items.Count; i++) Items[i].Path = previous[i]; Settings.Paths = previous.ToList(); throw; }
+            if (Changed != null) Changed();
         }
 
         private void Publish() { Save(); if (Changed != null) Changed(); }

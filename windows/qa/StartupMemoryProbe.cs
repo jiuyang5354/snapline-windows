@@ -182,7 +182,7 @@ internal static class StartupMemoryProbe
                 }
                 if (name == "tall")
                 {
-                    object thumbnail = item.GetType().GetField("Thumbnail", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(item);
+                    object thumbnail = item.GetType().GetMethod("GetThumbnail", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(item, null);
                     int width = (int)thumbnail.GetType().GetProperty("PixelWidth").GetValue(thumbnail, null);
                     int height = (int)thumbnail.GetType().GetProperty("PixelHeight").GetValue(thumbnail, null);
                     if (width > 480 || height > 480 || width < 1 || height < 1)

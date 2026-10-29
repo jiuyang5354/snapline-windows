@@ -20,3 +20,43 @@ v1.4.4 设置窗口继续参考用户提供的 liquid-glass 和 liquid-metal ski
 v1.4.5 在同一套原生材质上调整透明度与泛光：降低毛玻璃白色覆盖以保留背景层次，提高液态金属外侧泛光增益，并把柔化与泛光合并进同一条浮点管线，避免裁剪丢失亮边。仍不包含 skill 文件、网页 JavaScript 或原 WebGL 引擎。
 
 v1.4.6 设置玻璃通过原生 WPF 像素着色器采样缓存背景和 Snell 光学贴图，参考 https://glass.outpacestudios.com/ 的边缘折射与方向高光说明及用户提供的 liquid-glass skill。金属计算改在后台线程完成；仍不包含原网站页面代码或原 WebGL 引擎。
+
+## 拖拽暂存架来源
+
+暂存架移植自 https://github.com/jiuyang5354/Dropline- ，参考提交 `51f2d7c5c4a988bdc391af3ec2636b3badb4d451`。已调整为 Snapline 内部组件，共用程序生命周期、设置和托盘。Dropline 的交互灵感来自 Yoink（Eternal Storms Software）；双方无关联，未使用 Yoink 代码或素材。以下保留 Dropline 原 MIT 声明：
+
+```text
+MIT License
+
+Copyright (c) 2026 jiuyang5354
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## PDF and image conversion components
+
+The first local PDF toolbox uses PDFsharp-GDI 6.2.4 by empira Software GmbH under MIT, plus its required Microsoft .NET libraries under their bundled licenses. WebP uses the official Google libwebp 1.6.0 Windows x64 cwebp/dwebp utilities. Their copyright notices and license texts are retained in Converters/licenses. Package origins, exact versions and SHA-256 hashes are recorded in windows/conversion-dependencies.lock.json; runtime conversion does not download libraries or upload documents.
+
+The iLovePDF website is a feature-category reference only. No iLovePDF application code, branding or processing service is included. The new native file-list interaction was informed by 21st metadata references, without importing their component code.
+
+## Native tools interface and icons
+
+The native tools layout and selection motion reference Sortable File List by sean0205 and Stretch Tabs by dhxwhy on 21st.dev. Their component sources were consulted during design; the application uses its own WPF controls and animations, without bundling React components or a browser runtime.
+
+QingIcon SVG paths were retrieved through QingIcon MCP and adapted to WPF Geometry with theme colors and adjusted stroke widths. Copyright 2026 Asorn; Apache License 2.0. The upstream license and NOTICE are included as Converters/licenses/QingIcon-LICENSE.txt and QingIcon-NOTICE.txt. Existing Tendedero, Dropline, PDFsharp, WebP and Microsoft component notices are retained.

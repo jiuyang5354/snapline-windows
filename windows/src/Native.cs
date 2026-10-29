@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
@@ -131,6 +131,7 @@ namespace Snapline
     {
         internal const uint DefaultKey = 0x54;
         internal const uint DefaultCaptureKey = 0x53;
+        internal const uint DefaultClearKey = 0x08;
         internal const uint DefaultModifiers = 3;
 
         internal static bool IsModifier(uint key)
@@ -157,7 +158,7 @@ namespace Snapline
         {
             string text = ((modifiers & 2) != 0 ? "Ctrl + " : "") + ((modifiers & 1) != 0 ? "Alt + " : "") +
                 ((modifiers & 4) != 0 ? "Shift + " : "") + ((modifiers & 8) != 0 ? "Win + " : "");
-            return text + new Forms.KeysConverter().ConvertToString((Forms.Keys)key);
+            return text + (key == 8 ? "Backspace" : new Forms.KeysConverter().ConvertToString((Forms.Keys)key));
         }
     }
 
@@ -167,6 +168,12 @@ namespace Snapline
         internal event Action ClipboardChanged;
         internal event Action ToggleRequested;
         internal event Action CaptureRequested;
+        internal event Action ClearRequested;
+        internal bool ClearHotkeyRegistered { get; private set; }
+        internal uint ClearHotkeyKey { get; private set; }
+        internal uint ClearHotkeyModifiers { get; private set; }
+        internal int ClearHotkeyId { get; private set; }
+        internal string ClearHotkeyText { get { return Hotkey.Text(ClearHotkeyKey, ClearHotkeyModifiers); } }
         internal bool HotkeyRegistered { get; private set; }
         internal int HotkeyError { get; private set; }
         internal uint HotkeyKey { get; private set; }
@@ -182,6 +189,9 @@ namespace Snapline
         internal IntPtr Handle { get { return source.Handle; } }
 
         internal MessageSink(uint key, uint modifiers, uint captureKey, uint captureModifiers)
+            : this(key, modifiers, captureKey, captureModifiers, Hotkey.DefaultClearKey, Hotkey.DefaultModifiers) { }
+
+        internal MessageSink(uint key, uint modifiers, uint captureKey, uint captureModifiers, uint clearKey, uint clearModifiers)
         {
             source = new HwndSource(new HwndSourceParameters("Snapline messages") {
                 ParentWindow = new IntPtr(-3), Width = 0, Height = 0, WindowStyle = 0
@@ -197,6 +207,13 @@ namespace Snapline
                 TrySetHotkey(Hotkey.DefaultKey, Hotkey.DefaultModifiers, out error);
             if (!HotkeyRegistered && HotkeyError == 1409) TrySetHotkey(Hotkey.DefaultKey, 7, out error);
             TrySetCaptureHotkey(captureKey, captureModifiers, out error);
+            ClearHotkeyKey = clearKey; ClearHotkeyModifiers = clearModifiers;
+            if (Hotkey.Validate(clearKey, clearModifiers) == null &&
+                !(HotkeyRegistered && clearKey == HotkeyKey && clearModifiers == HotkeyModifiers) &&
+                !(CaptureHotkeyRegistered && clearKey == CaptureHotkeyKey && clearModifiers == CaptureHotkeyModifiers)) {
+                ClearHotkeyId = ReserveHotkey(clearKey, clearModifiers, 0, out error);
+                ClearHotkeyRegistered = ClearHotkeyId != 0;
+            }
         }
 
         internal bool TrySetHotkey(uint key, uint modifiers, out string error)
@@ -205,6 +222,9 @@ namespace Snapline
             if (error != null) return false;
             if (CaptureHotkeyRegistered && key == CaptureHotkeyKey && modifiers == CaptureHotkeyModifiers) {
                 error = "显示 / 隐藏与区域截图不能使用同一快捷键。"; return false;
+            }
+            if (ClearHotkeyRegistered && key == ClearHotkeyKey && modifiers == ClearHotkeyModifiers) {
+                error = "显示 / 隐藏与清空截图栏不能使用同一快捷键。"; return false;
             }
             if (HotkeyRegistered && key == HotkeyKey && modifiers == HotkeyModifiers) return true;
             int nextId = ReserveHotkey(key, modifiers, 0, out error);
@@ -244,8 +264,10 @@ namespace Snapline
             error = null;
             if (HotkeyRegistered && key == HotkeyKey && modifiers == HotkeyModifiers) return HotkeyId;
             if (CaptureHotkeyRegistered && key == CaptureHotkeyKey && modifiers == CaptureHotkeyModifiers) return CaptureHotkeyId;
+            if (ClearHotkeyRegistered && key == ClearHotkeyKey && modifiers == ClearHotkeyModifiers) return ClearHotkeyId;
             int id = 1;
-            while ((HotkeyRegistered && id == HotkeyId) || (CaptureHotkeyRegistered && id == CaptureHotkeyId) || id == pendingId) id++;
+            while ((HotkeyRegistered && id == HotkeyId) || (CaptureHotkeyRegistered && id == CaptureHotkeyId) ||
+                (ClearHotkeyRegistered && id == ClearHotkeyId) || id == pendingId) id++;
             if (Native.RegisterHotKey(source.Handle, id, modifiers | 0x4000, key)) return id;
             error = "这个按键已被占用或被 Windows 保留，请换一个按键组合。";
             return 0;
@@ -253,29 +275,52 @@ namespace Snapline
 
         private void ReleaseReserved(int id)
         {
-            if (id != 0 && !(HotkeyRegistered && id == HotkeyId) && !(CaptureHotkeyRegistered && id == CaptureHotkeyId))
+            if (id != 0 && !(HotkeyRegistered && id == HotkeyId) && !(CaptureHotkeyRegistered && id == CaptureHotkeyId) && !(ClearHotkeyRegistered && id == ClearHotkeyId))
                 Native.UnregisterHotKey(source.Handle, id);
         }
 
         internal bool TrySetHotkeys(uint key, uint modifiers, uint captureKey, uint captureModifiers, Action save, out string error)
+        { return SetHotkeys(key, modifiers, captureKey, captureModifiers, ClearHotkeyKey, ClearHotkeyModifiers, ClearHotkeyRegistered, save, out error); }
+
+        internal bool TrySetHotkeys(uint key, uint modifiers, uint captureKey, uint captureModifiers, uint clearKey, uint clearModifiers, Action save, out string error)
+        { return SetHotkeys(key, modifiers, captureKey, captureModifiers, clearKey, clearModifiers, true, save, out error); }
+
+        private bool SetHotkeys(uint key, uint modifiers, uint captureKey, uint captureModifiers, uint clearKey, uint clearModifiers, bool includeClear, Action save, out string error)
         {
-            error = Hotkey.Validate(key, modifiers) ?? Hotkey.Validate(captureKey, captureModifiers);
-            if (error != null) return false;
-            if (key == captureKey && modifiers == captureModifiers) {
-                error = "显示 / 隐藏与区域截图不能使用同一快捷键。"; return false;
+            uint[] keys = includeClear ? new[] { key, captureKey, clearKey } : new[] { key, captureKey };
+            uint[] flags = includeClear ? new[] { modifiers, captureModifiers, clearModifiers } : new[] { modifiers, captureModifiers };
+            string[] labels = { "显示 / 隐藏", "区域截图", "清空截图栏" };
+            for (int i = 0; i < keys.Length; i++) {
+                error = Hotkey.Validate(keys[i], flags[i]);
+                if (error != null) return false;
+                for (int j = 0; j < i; j++) if (keys[i] == keys[j] && flags[i] == flags[j]) {
+                    error = labels[j] + "与" + labels[i] + "不能使用同一快捷键。"; return false;
+                }
             }
-            int nextToggle = ReserveHotkey(key, modifiers, 0, out error);
-            if (nextToggle == 0) { error = "显示 / 隐藏：" + error; return false; }
-            int nextCapture = ReserveHotkey(captureKey, captureModifiers, nextToggle, out error);
-            if (nextCapture == 0) { ReleaseReserved(nextToggle); error = "区域截图：" + error; return false; }
+            var reserved = new List<int>();
+            for (int i = 0; i < keys.Length; i++) {
+                // Pending registrations are not yet in the active properties.
+                int id = 1;
+                while ((HotkeyRegistered && id == HotkeyId) || (CaptureHotkeyRegistered && id == CaptureHotkeyId) ||
+                    (ClearHotkeyRegistered && id == ClearHotkeyId) || reserved.Contains(id)) id++;
+                if (HotkeyRegistered && keys[i] == HotkeyKey && flags[i] == HotkeyModifiers) id = HotkeyId;
+                else if (CaptureHotkeyRegistered && keys[i] == CaptureHotkeyKey && flags[i] == CaptureHotkeyModifiers) id = CaptureHotkeyId;
+                else if (ClearHotkeyRegistered && keys[i] == ClearHotkeyKey && flags[i] == ClearHotkeyModifiers) id = ClearHotkeyId;
+                else if (!Native.RegisterHotKey(source.Handle, id, flags[i] | 0x4000, keys[i])) {
+                    foreach (int pending in reserved) ReleaseReserved(pending);
+                    error = labels[i] + "：这个按键已被占用或被 Windows 保留，请换一个按键组合。"; return false;
+                }
+                reserved.Add(id);
+            }
             try { if (save != null) save(); }
-            catch { ReleaseReserved(nextToggle); ReleaseReserved(nextCapture); throw; }
-            // Keep existing registrations until settings are saved, including when the two bindings swap roles.
-            if (HotkeyRegistered && HotkeyId != nextToggle && HotkeyId != nextCapture) Native.UnregisterHotKey(source.Handle, HotkeyId);
-            if (CaptureHotkeyRegistered && CaptureHotkeyId != nextToggle && CaptureHotkeyId != nextCapture) Native.UnregisterHotKey(source.Handle, CaptureHotkeyId);
-            HotkeyId = nextToggle; HotkeyKey = key; HotkeyModifiers = modifiers; HotkeyRegistered = true; HotkeyError = 0;
-            CaptureHotkeyId = nextCapture; CaptureHotkeyKey = captureKey; CaptureHotkeyModifiers = captureModifiers; CaptureHotkeyRegistered = true;
-            return true;
+            catch { foreach (int pending in reserved) ReleaseReserved(pending); throw; }
+            if (HotkeyRegistered && !reserved.Contains(HotkeyId)) Native.UnregisterHotKey(source.Handle, HotkeyId);
+            if (CaptureHotkeyRegistered && !reserved.Contains(CaptureHotkeyId)) Native.UnregisterHotKey(source.Handle, CaptureHotkeyId);
+            if (ClearHotkeyRegistered && !reserved.Contains(ClearHotkeyId)) Native.UnregisterHotKey(source.Handle, ClearHotkeyId);
+            HotkeyId = reserved[0]; HotkeyKey = key; HotkeyModifiers = modifiers; HotkeyRegistered = true; HotkeyError = 0;
+            CaptureHotkeyId = reserved[1]; CaptureHotkeyKey = captureKey; CaptureHotkeyModifiers = captureModifiers; CaptureHotkeyRegistered = true;
+            if (includeClear) { ClearHotkeyId = reserved[2]; ClearHotkeyKey = clearKey; ClearHotkeyModifiers = clearModifiers; ClearHotkeyRegistered = true; }
+            error = null; return true;
         }
 
         internal void ClearHotkey()
@@ -286,6 +331,7 @@ namespace Snapline
 
         private IntPtr Hook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
+            if (message == Native.WM_HOTKEY && wParam.ToInt32() == ClearHotkeyId && ClearHotkeyRegistered && ClearRequested != null) ClearRequested();
             if (message == Native.WM_CLIPBOARDUPDATE && ClipboardChanged != null) ClipboardChanged();
             if (message == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId && HotkeyRegistered && ToggleRequested != null) ToggleRequested();
             if (message == Native.WM_HOTKEY && wParam.ToInt32() == CaptureHotkeyId && CaptureHotkeyRegistered && CaptureRequested != null) CaptureRequested();
@@ -298,6 +344,8 @@ namespace Snapline
             ClearHotkey();
             if (CaptureHotkeyRegistered) Native.UnregisterHotKey(source.Handle, CaptureHotkeyId);
             CaptureHotkeyRegistered = false;
+            if (ClearHotkeyRegistered) Native.UnregisterHotKey(source.Handle, ClearHotkeyId);
+            ClearHotkeyRegistered = false;
             source.Dispose();
         }
     }

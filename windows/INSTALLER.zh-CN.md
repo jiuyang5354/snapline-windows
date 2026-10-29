@@ -1,10 +1,10 @@
-# Snapline Windows 安装版
+﻿# Snapline Windows 安装版
 
 Snapline 是 Tendedero 的非官方 Windows 移植版。原项目作者为 Alejandro Buján（https://github.com/alejandrobujan/tendedero），Windows 版由 jiuyang5354 发布。使用独立名称和图标，不代表原作者背书。完整署名与许可见同目录的 NOTICE.md、LICENSE 和 UPSTREAM-LICENSE.txt。
 
 ## 安装和桌面图标
 
-本次构建为 `Snapline-Windows-Setup-v1.4.7.exe`，双击运行中文安装向导。“创建桌面快捷方式”默认勾选，可以取消。开始菜单入口始终创建；桌面图标使用程序自己的 Snapline 图标。首次运行本版显示更新公告，说明历史图片恢复和去重的内存优化、原去重结果保留，以及反馈用户的实际启动问题仍待确认；关闭后同一版本不再重复弹出，托盘和“设置 → 关于”可重新查看。保留自定义区域截图键（默认 Ctrl + Alt + S）、画图启动修复、悬停 C / A / D / Delete 操作。区域截图的鼠标指针开关位于“设置 → 截图”，默认关闭。
+本次构建为 `Snapline-Windows-Setup-v1.5.0.exe`（Beta 1 测试候选），双击运行中文安装向导。“创建桌面快捷方式”默认勾选，可以取消；开始菜单入口始终创建。首次运行新的三段版本号会显示更新公告，同一版本不重复弹出，托盘和“设置 → 关于”可重看。当前本地开发预览已读过 v1.5.0 时，可手动查看本次公告。新版包含文件暂存架、每 9 张分组的截图历史、统一的 PDF / 转格式 / 压缩 / 重命名 / ZIP 工作台，并保留快捷键、区域截图与原有玻璃截图栏。
 
 默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，只安装给当前 Windows 用户，不需要管理员权限。需要 Windows 10 / 11 和 .NET Framework 4.8 或更高版本；不自动下载或修改系统运行时。
 

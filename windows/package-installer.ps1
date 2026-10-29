@@ -1,10 +1,17 @@
 param(
-    [string]$PortableZip = (Join-Path $PSScriptRoot 'Snapline-Windows-v1.4.4.zip'),
+    [string]$PortableZip,
     [string]$ChecksumFile = (Join-Path (Split-Path $PSScriptRoot -Parent) 'SHA256SUMS.txt'),
     [string]$NsisPath = (Join-Path $PSScriptRoot '.tools\nsis-3.13\makensis.exe'),
     [switch]$Test
 )
 $ErrorActionPreference = 'Stop'
+& (Join-Path $PSScriptRoot 'restore-converters.ps1')
+if ([string]::IsNullOrWhiteSpace($PortableZip)) {
+    $builtExecutable = Join-Path $PSScriptRoot 'bin\Snapline.exe'
+    if (-not (Test-Path -LiteralPath $builtExecutable)) { throw 'Build Snapline first, or pass -PortableZip and -ChecksumFile explicitly.' }
+    $builtVersion = [Reflection.AssemblyName]::GetAssemblyName($builtExecutable).Version.ToString(3)
+    $PortableZip = Join-Path $PSScriptRoot ('Snapline-Windows-v' + $builtVersion + '.zip')
+}
 if (-not (Test-Path -LiteralPath $NsisPath)) { throw 'Download NSIS 3.13 from https://nsis.sourceforge.io/Download or pass -NsisPath.' }
 $portableName = [System.IO.Path]::GetFileName($PortableZip)
 $checksumLine = @(Get-Content -LiteralPath $ChecksumFile | Where-Object { $_ -match ('^[0-9a-fA-F]{64}\s+\*?' + [regex]::Escape($portableName) + '$') })
@@ -39,13 +46,16 @@ $absoluteSource = [System.IO.Path]::GetFullPath($sourceRoot)
 if (-not $absoluteSource.StartsWith($absoluteStage + '\', [System.StringComparison]::OrdinalIgnoreCase)) { throw 'Installer source staging escaped dist.' }
 if (Test-Path -LiteralPath $absoluteSource) { Remove-Item -LiteralPath $absoluteSource -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'windows\qa') | Out-Null
-foreach ($name in @('README.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md', 'SHA256SUMS.txt')) {
+foreach ($name in @('README.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md')) {
     Copy-Item -LiteralPath (Join-Path (Split-Path $PSScriptRoot -Parent) $name) -Destination $sourceRoot
 }
-foreach ($name in @('installer.nsi', 'package-installer.ps1', 'INSTALLER.zh-CN.md', 'Snapline.ico')) {
+Copy-Item -LiteralPath $ChecksumFile -Destination (Join-Path $sourceRoot 'SHA256SUMS.txt')
+foreach ($name in @('installer.nsi', 'package-installer.ps1', 'restore-converters.ps1', 'conversion-dependencies.lock.json', 'INSTALLER.zh-CN.md', 'Snapline.ico')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $sourceRoot 'windows')
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'qa\InstallerTests.ps1') -Destination (Join-Path $sourceRoot 'windows\qa')
+New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'windows\ui') | Out-Null
+foreach ($name in @('QingIcon-LICENSE.txt','QingIcon-NOTICE.txt')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot ('ui\' + $name)) -Destination (Join-Path $sourceRoot 'windows\ui') }
 $qaReport = Join-Path $PSScriptRoot 'qa\output\installer\installer-results.json'
 if (Test-Path -LiteralPath $qaReport) {
     $results = Get-Content -LiteralPath $qaReport -Raw | ConvertFrom-Json

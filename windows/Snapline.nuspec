@@ -27,5 +27,7 @@
     <file src="portable/NOTICE.md" target="tools/Snapline" />
     <file src="portable/QA.md" target="tools/Snapline" />
     <file src="portable/preview.png" target="tools/Snapline" />
+    <file src="portable/PDF-TOOLS-PLAN.zh-CN.md" target="tools/Snapline" />
+    <file src="portable\Converters\**\*" target="tools\Snapline\Converters" />
   </files>
 </package>

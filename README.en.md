@@ -4,7 +4,7 @@
 
 An unofficial Windows implementation of [Tendedero](https://github.com/alejandrobujan/tendedero) by [Alejandro Buján](https://github.com/alejandrobujan), using C# / WPF and Win32. It hangs screenshots along the top of the screen for copying, previewing, editing, and dragging into other apps. This project has its own name and icon and is not endorsed by the upstream author.
 
-**v1.4.11 fixes collection of PowerPoint text boxes as images.** Preview images attached when copying whole text boxes or shapes from Office/WPS are skipped; image objects copied from those applications are also skipped. Use region capture when needed. Since v1.4.10, native clipboard formats are checked before accessing OLE data, skipping text, tables, and recognized Illustrator/AICB/PDF/SVG mixed content. Automatic-collection failures notify at most once per run. This remains a Windows prerelease; see [QA](windows/QA.md) for the actual verification scope.
+**v1.5.0 Beta 1 adds a native file workbench.** It includes a floating file shelf, screenshot history in groups of nine, batch rename, image conversion and compression, ZIP, WebP and offline PDF tools. The five tool windows share light/dark appearance and carry input files between tools. It retains the v1.4.11 Office/WPS object-clipboard filter. This is a prerelease for testing; see [QA](windows/QA.md) for completed checks and remaining device validation.
 
 ![Snapline Windows preview](docs/preview.png)
 
@@ -12,16 +12,16 @@ The actual WPF screenshot bar is shown on a generated presentation background. G
 
 ![Unified settings](docs/settings.png)
 
-The v1.4.6 settings window has General, Capture, Shortcuts, Storage, and About pages. Its background is sampled into memory before opening and repositioned while moving; changes behind it are not refreshed live.
+The image above shows an earlier settings window. v1.5 uses six solid-background settings pages with light, dark and system appearance. Screenshot containers retain their original glass effect; PDF and file processing use the new native workbench.
 
 ## Download
 
-- [Windows installer](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.11/Snapline-Windows-Setup-v1.4.11.exe)
-- [Portable package](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.11/Snapline-Windows-v1.4.11.zip)
-- [Buildable source](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.11/Snapline-Windows-Source-v1.4.11.zip)
-- [Installer source and verification](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.11/Snapline-Windows-Installer-Source-v1.4.11.zip)
-- [Installer SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.11/SHA256SUMS-Setup.txt)
-- [Release notes and checksums](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.4.11)
+- [Windows installer](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.0/Snapline-Windows-Setup-v1.5.0.exe)
+- [Portable package](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.0/Snapline-Windows-v1.5.0.zip)
+- [Buildable source](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.0/Snapline-Windows-Source-v1.5.0.zip)
+- [Installer source and verification](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.0/Snapline-Windows-Installer-Source-v1.5.0.zip)
+- [Installer SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.0/SHA256SUMS-Setup.txt)
+- [Release notes and checksums](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.5.0)
 
 Requires Windows 10/11 and .NET Framework 4.8 or later. No administrator rights are needed.
 
@@ -29,7 +29,7 @@ The installer defaults to `%LOCALAPPDATA%\Programs\Snapline`, provides Start men
 
 For portable use, extract the entire ZIP and run `Snapline.exe`. The app remains in the tray, possibly under hidden icons. It is unsigned, so Windows may show an unknown-publisher warning.
 
-A [GitHub Packages NuGet package](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows) is also available as `jiuyang5354.Snapline.Windows`, version `1.4.11-preview`. Its app files are under `tools/Snapline/`; downloading requires package authentication. Most users should choose the installer or portable ZIP. See [package guidance](windows/PACKAGE-README.md).
+A [GitHub Packages NuGet package](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows) is also available as `jiuyang5354.Snapline.Windows`, version `1.5.0-preview`. Its app files are under `tools/Snapline/`; downloading requires package authentication. Most users should choose the installer or portable ZIP. See [package guidance](windows/PACKAGE-README.md).
 
 ## Use
 

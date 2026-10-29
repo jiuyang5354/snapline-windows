@@ -1,7 +1,9 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -21,6 +23,7 @@ namespace Snapline
         internal readonly LineWindow Line;
         internal readonly MessageSink Sink;
         internal readonly HoverKeys Hover;
+        internal readonly FileShelf Files;
         private readonly Action<string, string> launch;
         internal bool Busy;
         private readonly Forms.NotifyIcon tray;
@@ -40,6 +43,7 @@ namespace Snapline
         private readonly Forms.ToolStripMenuItem clipboardMenu;
         private readonly Forms.ToolStripMenuItem toggleMenu;
         private readonly Forms.ToolStripMenuItem captureMenu;
+        private readonly Forms.ToolStripMenuItem clearMenu;
         private readonly Forms.ToolStripMenuItem latestMenu;
         private readonly Forms.ToolStripMenuItem pauseMenu;
         private readonly Forms.ToolStripMenuItem updateMenu;
@@ -54,7 +58,8 @@ namespace Snapline
         private UpdateDialog updateDialog;
         private SettingsWindow settingsWindow;
         private AnnouncementWindow announcementWindow;
-        private bool DialogOpen { get { return settingsWindow != null || updateDialog != null || announcementWindow != null; } }
+        private Window fileToolsWindow;
+        private bool DialogOpen { get { return settingsWindow != null || updateDialog != null || announcementWindow != null || fileToolsWindow != null; } }
 
         internal Controller(string root, bool watchFiles, Updates updateClient = null, Action<string, string> launch = null)
         {
@@ -65,9 +70,10 @@ namespace Snapline
             Store = new ImageStore(root);
             StartupDiagnostics.Phase = "Initializing screenshot line and native input";
             Line = new LineWindow(this);
-            Sink = new MessageSink(Store.Settings.HotkeyKey, Store.Settings.HotkeyModifiers, Store.Settings.CaptureHotkeyKey, Store.Settings.CaptureHotkeyModifiers);
+            Sink = new MessageSink(Store.Settings.HotkeyKey, Store.Settings.HotkeyModifiers, Store.Settings.CaptureHotkeyKey, Store.Settings.CaptureHotkeyModifiers, Store.Settings.ClearHotkeyKey, Store.Settings.ClearHotkeyModifiers);
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Snapline.ico")) icon = new Icon(stream);
             tray = new Forms.NotifyIcon { Icon = icon, Text = "Snapline · 截图晾衣绳", Visible = true };
+            Files = new FileShelf(this, watchFiles);
             var menu = new Forms.ContextMenuStrip();
             toggleMenu = Add(menu, "显示 / 隐藏    " + (Sink.HotkeyRegistered ? Sink.HotkeyText : "点击托盘图标"), Toggle);
             Add(menu, "设置…", delegate { ShowSettings("General"); });
@@ -86,7 +92,9 @@ namespace Snapline
             Add(menu, "选择截图文件夹…", ChooseFolder);
             Add(menu, "打开截图收件夹", delegate { Shell(Store.Inbox, null); });
             menu.Items.Add(new Forms.ToolStripSeparator());
-            Add(menu, "全部取下（保留文件）", Store.Clear);
+            clearMenu = Add(menu, "清空截图栏（保留文件）    " + Sink.ClearHotkeyText, ClearLine);
+            menu.Items.Add(Files.Menu());
+            Add(menu, "PDF 工具箱…", delegate { dispatcher.BeginInvoke(new Action(delegate { OpenFileTools(FileTool.Pdf, new string[0]); })); });
             menu.Items.Add(new Forms.ToolStripSeparator());
             updateMenu = Add(menu, "检查更新…", delegate { if (availableUpdate != null) ShowUpdate(availableUpdate); else CheckUpdates(true); });
             autoUpdateMenu = new Forms.ToolStripMenuItem("自动检查更新（含预发布）") { Checked = Store.Settings.AutoCheckUpdates, CheckOnClick = true };
@@ -116,6 +124,10 @@ namespace Snapline
             Sink.ToggleRequested += delegate {
                 if (settingsWindow != null && settingsWindow.RecordingHotkey) settingsWindow.CaptureCurrent(Sink.HotkeyKey, Sink.HotkeyModifiers);
                 else Toggle();
+            };
+            Sink.ClearRequested += delegate {
+                if (settingsWindow != null && settingsWindow.RecordingHotkey) settingsWindow.CaptureCurrent(Sink.ClearHotkeyKey, Sink.ClearHotkeyModifiers);
+                else if (!Busy && !DialogOpen) ClearLine();
             };
             Sink.CaptureRequested += delegate {
                 if (settingsWindow != null && settingsWindow.RecordingHotkey) settingsWindow.CaptureCurrent(Sink.CaptureHotkeyKey, Sink.CaptureHotkeyModifiers);
@@ -149,6 +161,7 @@ namespace Snapline
                 Notify("保存的快捷键无法注册，本次使用 " + Sink.HotkeyText + " 展开 / 收起。可从托盘重新设置。");
             if (!Sink.ClipboardRegistered) Notify("剪贴板监听注册失败。仍可从托盘挂入图片或监听截图文件夹。");
             if (!Sink.CaptureHotkeyRegistered) Notify("区域截图快捷键 " + Sink.CaptureHotkeyText + " 无法注册。请在设置 → 快捷键中更改，仍可从截图栏或托盘截图。");
+            if (!Sink.ClearHotkeyRegistered) Notify("清空截图栏快捷键 " + Sink.ClearHotkeyText + " 无法注册。请在设置 → 快捷键中更改，仍可使用截图栏按钮或托盘入口。");
             if (Store.Items.Count == 0)
             {
                 tray.ShowBalloonTip(5000, "Snapline · 截图晾衣绳", "按 Win + Shift + S 截图；鼠标停在屏幕顶端即可展开。右键托盘图标打开菜单。", Forms.ToolTipIcon.Info);
@@ -189,12 +202,13 @@ namespace Snapline
         private void Tick(object sender, EventArgs args)
         {
             var cursor = Native.Cursor();
+            if (!Busy && !DialogOpen) Files.Poll(cursor, (Native.GetAsyncKeyState(1) & 0x8000) != 0);
             var display = Forms.Screen.FromPoint(cursor);
             var now = DateTime.UtcNow;
             bool edge = cursor.Y >= display.Bounds.Top && cursor.Y <= display.Bounds.Top + 3;
             if (!edge) suppressed = false;
             Line.UpdateInteraction(cursor);
-            if (Busy) return;
+            if (Busy || Files.IsInteracting) return;
             if (Native.IsFullScreen(Native.GetForegroundWindow(), (Line.Revealed ? Line.Display : display).Bounds))
             {
                 Line.Tuck(); edgeSince = null; return;
@@ -307,11 +321,8 @@ namespace Snapline
             return image;
         }
 
-        // Office / WPS put a rendered picture (PNG, JFIF, Bitmap, EMF) beside their own shape data when a whole
-        // text box, shape or slide object is selected and copied. Those pictures are previews of editable
-        // objects, not screenshots, so the object markers skip the clipboard before any image is read.
+        // Office/WPS render editable objects beside their private shape data; those images are previews.
         private static readonly string[] OfficeObjectMarkers = { "GVML", "PowerPoint", "Office Drawing", "Kingsoft", "WPS" };
-
         internal static bool IsOfficeObjectFormat(string format)
         {
             if (string.IsNullOrEmpty(format)) return false;
@@ -356,7 +367,7 @@ namespace Snapline
             data.SetData("PNG", new MemoryStream(ImageStore.Png(image)), false);
             data.SetData(DataFormats.FileDrop, new[] { shot.Path });
             data.SetData(ClipboardOrigin, "Snapline", false);
-            data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes(Store.Owns(shot.Path) ? 2 : 1)), false);
+            data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes(1)), false);
             return data;
         }
 
@@ -428,6 +439,11 @@ namespace Snapline
         { return ApplyPreferences(clipboard, paused, automatic, includeCursor, folder, key, modifiers, Store.Settings.CaptureHotkeyKey, Store.Settings.CaptureHotkeyModifiers, out error); }
 
         internal bool ApplyPreferences(bool clipboard, bool paused, bool automatic, bool includeCursor, string folder, uint key, uint modifiers, uint captureKey, uint captureModifiers, out string error)
+        { return ApplyPreferences(clipboard, paused, automatic, includeCursor, folder, key, modifiers, captureKey, captureModifiers,
+            Store.Settings.ClearHotkeyKey, Store.Settings.ClearHotkeyModifiers, out error); }
+
+        internal bool ApplyPreferences(bool clipboard, bool paused, bool automatic, bool includeCursor, string folder,
+            uint key, uint modifiers, uint captureKey, uint captureModifiers, uint clearKey, uint clearModifiers, out string error)
         {
             var settings = Store.Settings;
             bool oldClipboard = settings.ListenClipboard, oldPaused = settings.CollectionPaused, oldAutomatic = settings.AutoCheckUpdates;
@@ -436,7 +452,7 @@ namespace Snapline
             settings.ListenClipboard = clipboard; settings.CollectionPaused = paused;
             settings.AutoCheckUpdates = automatic; settings.WatchFolder = folder;
             settings.IncludeCursor = includeCursor;
-            if (!ChangeHotkeys(key, modifiers, captureKey, captureModifiers, out error)) {
+            if (!ChangeHotkeys(key, modifiers, captureKey, captureModifiers, clearKey, clearModifiers, out error)) {
                 settings.ListenClipboard = oldClipboard; settings.CollectionPaused = oldPaused;
                 settings.AutoCheckUpdates = oldAutomatic; settings.WatchFolder = oldFolder;
                 settings.IncludeCursor = oldCursor;
@@ -579,7 +595,7 @@ namespace Snapline
         internal void Edit(Shot shot) { Line.Tuck(); Shell(PaintPath(), "\"" + shot.Path + "\""); }
         internal void Reveal(Shot shot) { Shell("explorer.exe", "/select,\"" + shot.Path + "\""); }
 
-        private void Shell(string path, string arguments)
+        internal void Shell(string path, string arguments)
         {
             try {
                 if (launch != null) launch(path, arguments ?? "");
@@ -606,7 +622,7 @@ namespace Snapline
 
         private Action HoverAction(int key)
         {
-            if (disposed || Busy || DialogOpen) return null;
+            if (disposed || Busy || DialogOpen || Files.IsInteracting) return null;
             var point = Native.Cursor();
             var card = Line.ShotAt(new System.Windows.Point(point.X, point.Y));
             if (card == null) return null;
@@ -642,10 +658,22 @@ namespace Snapline
             if (shot != null) { Copy(shot); Captured(shot); }
         }
 
+        internal void ClearLine()
+        {
+            try { Store.Clear(); }
+            catch (Exception ex) { if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw; Notify("无法清空截图栏：" + ex.Message); }
+        }
+
         internal void Discard(Shot shot)
         {
             try { Store.Remove(shot, true); }
             catch (Exception ex) { if (!ImageStore.IsImageError(ex) && !(ex is OperationCanceledException)) throw; Notify("无法取下截图：" + ex.Message); }
+        }
+
+        internal void Detach(Shot shot)
+        {
+            try { Store.Remove(shot, false); }
+            catch (Exception ex) { if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw; Notify("无法取下截图：" + ex.Message); }
         }
 
         internal void Import()
@@ -685,12 +713,111 @@ namespace Snapline
         internal bool ChangeHotkey(uint key, uint modifiers, out string error)
         { return ChangeHotkeys(key, modifiers, Store.Settings.CaptureHotkeyKey, Store.Settings.CaptureHotkeyModifiers, out error); }
 
-        internal bool ChangeHotkeys(uint key, uint modifiers, uint captureKey, uint captureModifiers, out string error)
+        internal bool ChangeFileShelf(bool enabled, bool anyApp, bool keep, out string error)
         {
+            var settings = Store.Settings;
+            bool oldEnabled = settings.FileShelfEnabled, oldAny = settings.FileShelfAnyApp, oldKeep = settings.FileShelfKeepAfterDragOut;
+            settings.FileShelfEnabled = enabled; settings.FileShelfAnyApp = anyApp; settings.FileShelfKeepAfterDragOut = keep;
+            try { Store.Save(); }
+            catch (Exception ex) {
+                if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw;
+                settings.FileShelfEnabled = oldEnabled; settings.FileShelfAnyApp = oldAny; settings.FileShelfKeepAfterDragOut = oldKeep;
+                error = "无法保存暂存架设置：" + ex.Message; return false;
+            }
+            Files.Apply(); error = null; return true;
+        }
+
+        internal void FileShelfHotkey()
+        {
+            if (settingsWindow != null && settingsWindow.RecordingHotkey) settingsWindow.CaptureCurrent(0x44, 3);
+            else OpenFileShelf();
+        }
+
+        internal void OpenFileShelf()
+        {
+            if (fileToolsWindow != null) { fileToolsWindow.Activate(); return; }
+            if (settingsWindow == null) { Files.Toggle(); return; }
+            settingsWindow.Close();
+            dispatcher.BeginInvoke(new Action(Files.Toggle));
+        }
+
+        internal void OpenFileTools(FileTool tool, string[] paths)
+        {
+            if (fileToolsWindow != null) { fileToolsWindow.Activate(); return; }
+            if (disposed || Files.Window.IsClosed || Busy || DialogOpen || (paths.Length == 0 && tool != FileTool.Pdf)) return;
+            Busy = true; Line.Tuck(); Files.Window.Hide();
+            var previousNavigation = ToolDesign.Navigate;
+            var previousAppearance = ToolDesign.AppearanceChanged;
+            FileTool? nextTool = null;
+            Microsoft.Win32.UserPreferenceChangedEventHandler systemTheme = delegate {
+                if (Store.Settings.Appearance == "System") dispatcher.BeginInvoke(new Action(delegate {
+                    if (!disposed && fileToolsWindow != null) ToolDesign.ApplyAppearance("System");
+                }));
+            };
+            try {
+                ToolDesign.ApplyAppearance(Store.Settings.Appearance);
+                ToolDesign.AppearanceChanged = delegate(bool dark) {
+                    string previous = Store.Settings.Appearance; Store.Settings.Appearance = dark ? "Dark" : "Light";
+                    try { Store.Save(); Files.Window.ApplyAppearance(Store.Settings.Appearance); }
+                    catch (Exception ex) {
+                        if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw;
+                        Store.Settings.Appearance = previous; ToolDesign.ApplyAppearance(previous); Notify("外观保存失败：" + ex.Message);
+                    }
+                };
+                ToolDesign.Navigate = delegate(Window current, string mode) {
+                    if (current != fileToolsWindow) return;
+                    switch (mode) {
+                        case "pdf": nextTool = FileTool.Pdf; break;
+                        case "convert": nextTool = FileTool.Convert; break;
+                        case "compress": nextTool = FileTool.Compress; break;
+                        case "rename": nextTool = FileTool.Rename; break;
+                        case "zip": nextTool = FileTool.Zip; break;
+                        default: return;
+                    }
+                    var pdf = current as PdfToolsWindow; var files = current as FileToolsWindow;
+                    paths = (pdf != null ? pdf.Rows.AsEnumerable() : files.Rows).Select(row => row.Path).ToArray();
+                    current.Close();
+                };
+                Microsoft.Win32.SystemEvents.UserPreferenceChanged += systemTheme;
+                do {
+                    nextTool = null;
+                    string output = Path.Combine(Files.Store.Root, "Processed");
+                    fileToolsWindow = tool == FileTool.Pdf ? (Window)new PdfToolsWindow(paths, output, Files.Store.Add, path => Shell(path, null)) :
+                        new FileToolsWindow(tool, paths, output, CommitFileRename, Files.Store.Add, path => Shell(path, null));
+                    fileToolsWindow.ShowDialog();
+                    if (!nextTool.HasValue) break;
+                    tool = nextTool.Value;
+                } while (!disposed && !Files.Window.IsClosed);
+            }
+            finally {
+                Microsoft.Win32.SystemEvents.UserPreferenceChanged -= systemTheme;
+                ToolDesign.Navigate = previousNavigation; ToolDesign.AppearanceChanged = previousAppearance;
+                fileToolsWindow = null; Busy = DialogOpen;
+                if (!disposed && !Files.Window.IsClosed) { Files.Window.RefreshItems(); Files.Window.Restore(); }
+            }
+        }
+        internal void CommitFileRename(IDictionary<string, string> changes)
+        {
+            Store.RemapPaths(changes);
+            try { Files.Store.RemapPaths(changes); }
+            catch {
+                Store.RemapPaths(changes.ToDictionary(pair => pair.Value, pair => pair.Key, StringComparer.OrdinalIgnoreCase));
+                throw;
+            }
+            Files.Window.RefreshItems();
+        }
+
+        internal bool ChangeHotkeys(uint key, uint modifiers, uint captureKey, uint captureModifiers, out string error)
+        { return ChangeHotkeys(key, modifiers, captureKey, captureModifiers, Store.Settings.ClearHotkeyKey, Store.Settings.ClearHotkeyModifiers, out error); }
+
+        internal bool ChangeHotkeys(uint key, uint modifiers, uint captureKey, uint captureModifiers, uint clearKey, uint clearModifiers, out string error)
+        {
+            uint savedClearKey = Store.Settings.ClearHotkeyKey, savedClearModifiers = Store.Settings.ClearHotkeyModifiers;
             uint savedKey = Store.Settings.HotkeyKey, savedModifiers = Store.Settings.HotkeyModifiers;
             uint savedCaptureKey = Store.Settings.CaptureHotkeyKey, savedCaptureModifiers = Store.Settings.CaptureHotkeyModifiers;
             try {
-                if (!Sink.TrySetHotkeys(key, modifiers, captureKey, captureModifiers, delegate {
+                if (!Sink.TrySetHotkeys(key, modifiers, captureKey, captureModifiers, clearKey, clearModifiers, delegate {
+                    Store.Settings.ClearHotkeyKey = clearKey; Store.Settings.ClearHotkeyModifiers = clearModifiers;
                     Store.Settings.HotkeyKey = key; Store.Settings.HotkeyModifiers = modifiers;
                     Store.Settings.CaptureHotkeyKey = captureKey; Store.Settings.CaptureHotkeyModifiers = captureModifiers;
                     Store.Save();
@@ -699,6 +826,7 @@ namespace Snapline
             catch (Exception ex)
             {
                 if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw;
+                Store.Settings.ClearHotkeyKey = savedClearKey; Store.Settings.ClearHotkeyModifiers = savedClearModifiers;
                 Store.Settings.HotkeyKey = savedKey;
                 Store.Settings.HotkeyModifiers = savedModifiers;
                 Store.Settings.CaptureHotkeyKey = savedCaptureKey;
@@ -708,6 +836,7 @@ namespace Snapline
             }
             toggleMenu.Text = "显示 / 隐藏    " + Sink.HotkeyText;
             captureMenu.Text = "区域截图…    " + Sink.CaptureHotkeyText;
+            clearMenu.Text = "清空截图栏（保留文件）    " + Sink.ClearHotkeyText;
             Line.RefreshStatus();
             return true;
         }
@@ -733,7 +862,7 @@ namespace Snapline
         internal void Help()
         {
             Busy = true;
-            try { MessageBox.Show("Win + Shift + S 或 PrintScreen 截图后，图片自动挂入。\n收集剪贴板图片也会收集从其他应用复制的图片，可在托盘菜单关闭。\n\n鼠标在屏幕顶端停留，或 " + Sink.HotkeyText + "：展开 / 收起。\n右键托盘 → 设置快捷键：录入单键或组合键，保存后立即生效。\n单击：复制图片。双击：用默认图片应用打开。\n长按 0.45 秒：用画图编辑，保存后刷新缩略图。\n鼠标指向截图时，C 复制、A 编辑、D / Delete 取下。\n拖入应用：发送图片或文件副本。\n拖入文件夹：由目标应用决定复制或移动；Shift 拖动可请求移动。\n右键：另存为、在文件夹中显示或取下。\n\n" + Sink.CaptureHotkeyText + " 或工具条、托盘 → 区域截图：拖动框选，Esc 取消。\n设置 → 快捷键：分别自定义显示与区域截图按键。\n设置 → 截图 → 截图包含鼠标指针：默认关闭。\n开启后先框选，再摆放指针，按 Enter 截图；不改变 Win + Shift + S。\n\n托盘 → 复制最近一张：直接复制，无须展开。\n暂停所有自动收集：同时暂停剪贴板和文件夹，重启后保持。\n开机启动：可选，默认关闭；移动程序后请重新勾选。\n自动检查更新：默认开启，每 24 小时检查并提醒；可关闭。\n安装版下载 EXE 后点击安装更新，覆盖升级；便携版退出后解压 ZIP。\n\n叉号或 D / Delete：收件夹图片进入回收站；外部原文件保留。\n最多保留 12 张，屏幕较窄时显示最近几张；旧文件仍在收件夹。\n\nSnapline " + Updates.CurrentVersion + " · Windows 非官方移植版\n基于 Alejandro Buján 的 Tendedero 交互与 MIT 代码。", "Snapline · 使用说明", MessageBoxButton.OK, MessageBoxImage.Information); }
+            try { MessageBox.Show("Win + Shift + S 或 PrintScreen 截图后，图片自动挂入。\n收集剪贴板图片也会收集从其他应用复制的图片，可在托盘菜单关闭。\n\n鼠标在屏幕顶端停留，或 " + Sink.HotkeyText + "：展开 / 收起。\n右键托盘 → 设置快捷键：录入单键或组合键，保存后立即生效。\n单击：复制图片。双击：用默认图片应用打开。\n长按 0.45 秒：用画图编辑，保存后刷新缩略图。\n鼠标指向截图时，C 复制、A 编辑、D / Delete 取下。\n拖入应用：发送图片或文件副本。\n拖入应用或文件夹：复制，截图继续留在绳上。\n右键：另存为、在文件夹中显示或取下。\n\n" + Sink.CaptureHotkeyText + " 或工具条、托盘 → 区域截图：拖动框选，Esc 取消。\n设置 → 快捷键：自定义显示、区域截图和清空截图栏按键。\n设置 → 截图 → 截图包含鼠标指针：默认关闭。\n开启后先框选，再摆放指针，按 Enter 截图；不改变 Win + Shift + S。\n\n托盘 → 复制最近一张：直接复制，无须展开。\n暂停所有自动收集：同时暂停剪贴板和文件夹，重启后保持。\n开机启动：可选，默认关闭；移动程序后请重新勾选。\n自动检查更新：默认开启，每 24 小时检查并提醒；可关闭。\n安装版下载 EXE 后点击安装更新，覆盖升级；便携版退出后解压 ZIP。\n\n叉号或 D / Delete：收件夹图片进入回收站；外部原文件保留。\n截图每 9 张一组，超过后新建一组，旧组仍保留并随重启恢复。\n在图片或分组条上滚轮向上看旧图、向下看新图；也可点前后箭头或“最新”。\n屏幕较窄时可继续翻看组内其余图片。\n" + Sink.ClearHotkeyText + "：清空全部截图分组，保留全部原文件。\n设置 → 截图：可选拖到未接收区域时取下卡片，默认关闭，Esc 取消保留。\n\nSnapline " + Updates.CurrentVersion + " · Windows 非官方移植版\n基于 Alejandro Buján 的 Tendedero 交互与 MIT 代码。", "Snapline · 使用说明", MessageBoxButton.OK, MessageBoxImage.Information); }
             finally { Busy = DialogOpen; }
         }
 
@@ -749,6 +878,7 @@ namespace Snapline
             updateCancel.Dispose();
             if (watch != null) watch.Dispose();
             Hover.Dispose();
+            Files.Dispose();
             Sink.Dispose();
             tray.Visible = false;
             tray.Dispose();

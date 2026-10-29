@@ -1,3 +1,4 @@
+﻿param([switch]$SkipPublicChecksumUpdate)
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $distributionRoot = Join-Path $projectRoot 'dist'
@@ -16,7 +17,9 @@ foreach ($name in $releaseFiles) {
 }
 Copy-Item -LiteralPath (Join-Path (Split-Path $projectRoot -Parent) 'docs\preview.png') -Destination (Join-Path $portableRoot 'preview.png')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'QA.md') -Destination (Join-Path $portableRoot 'QA.md')
-$sourceFiles = @('.gitignore', 'build.ps1', 'compile-shader.ps1', 'package.ps1', 'make-icon.ps1', 'app.manifest', 'Snapline.exe.config', 'Snapline.ico', 'README.zh-CN.md', 'QA.md', 'ANNOUNCEMENT.zh-CN.txt')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'PDF-TOOLS-PLAN.zh-CN.md') -Destination (Join-Path $portableRoot 'PDF-TOOLS-PLAN.zh-CN.md')
+& (Join-Path $projectRoot 'restore-converters.ps1') -Destination (Join-Path $portableRoot 'Converters')
+$sourceFiles = @('.gitignore', 'build.ps1', 'package.ps1', 'make-icon.ps1', 'compile-tool-shader.ps1', 'app.manifest', 'Snapline.exe.config', 'Snapline.ico', 'README.zh-CN.md', 'QA.md', 'ANNOUNCEMENT.zh-CN.txt', 'restore-converters.ps1', 'conversion-dependencies.lock.json', 'PDF-TOOLS-PLAN.zh-CN.md')
 foreach ($name in $sourceFiles) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination (Join-Path $sourceRoot ('windows\' + $name))
 }
@@ -25,6 +28,13 @@ Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Filter '*.cs' | ForEa
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\src')
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\Tests.cs') -Destination (Join-Path $sourceRoot 'windows\qa\Tests.cs')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\FileShelfTests.cs') -Destination (Join-Path $sourceRoot 'windows\qa\FileShelfTests.cs')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\ShotDragTests.cs') -Destination (Join-Path $sourceRoot 'windows\qa\ShotDragTests.cs')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\SettingsFeedbackTests.cs') -Destination (Join-Path $sourceRoot 'windows\qa\SettingsFeedbackTests.cs')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\FileToolsTests.cs') -Destination (Join-Path $sourceRoot 'windows\qa\FileToolsTests.cs')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\PdfToolsProbe.cs') -Destination (Join-Path $sourceRoot 'windows\qa\PdfToolsProbe.cs')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\ToolsOpeningProbe.cs') -Destination (Join-Path $sourceRoot 'windows\qa\ToolsOpeningProbe.cs')
+foreach ($name in @('ToolsDesignProbe.cs','ToolIntegrationProbe.cs','CardPhysicsProbe.cs','LineGroupsProbe.cs','ShelfPresentationProbe.cs')) { Copy-Item -LiteralPath (Join-Path $projectRoot ('qa\' + $name)) -Destination (Join-Path $sourceRoot 'windows\qa') }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\StartupMemoryProbe.cs') -Destination (Join-Path $sourceRoot 'windows\qa\StartupMemoryProbe.cs')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\ClipboardNativeProbe.cs') -Destination (Join-Path $sourceRoot 'windows\qa\ClipboardNativeProbe.cs')
 New-Item -ItemType Directory -Force -Path (Join-Path $sourceRoot 'windows\qa\fixtures\startup-memory') | Out-Null
@@ -32,7 +42,7 @@ Get-ChildItem -LiteralPath (Join-Path $projectRoot 'qa\fixtures\startup-memory')
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\qa\fixtures\startup-memory')
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'qa\fixtures\startup-memory\formats') -Destination (Join-Path $sourceRoot 'windows\qa\fixtures\startup-memory\formats') -Recurse
-Get-ChildItem -LiteralPath (Join-Path $projectRoot 'ui') -File | Where-Object { $_.Extension -in @('.xaml','.hlsl','.ps') } | ForEach-Object {
+Get-ChildItem -LiteralPath (Join-Path $projectRoot 'ui') -File | Where-Object { $_.Extension -in @('.xaml','.hlsl','.ps','.txt') } | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $sourceRoot 'windows\ui')
 }
 foreach ($repositoryFile in @('README.md', 'LICENSE', 'UPSTREAM-LICENSE.txt', 'NOTICE.md', 'CHANGELOG.md')) {
@@ -51,11 +61,15 @@ $repositoryRoot = Split-Path $projectRoot -Parent
 $portableHash = (Get-FileHash -LiteralPath $portableZip -Algorithm SHA256).Hash.ToLowerInvariant()
 $sourceHash = (Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLowerInvariant()
 $utf8 = New-Object System.Text.UTF8Encoding($false)
-[System.IO.File]::WriteAllText((Join-Path $repositoryRoot 'SHA256SUMS.txt'),
+$checksumPath = if ($SkipPublicChecksumUpdate) { Join-Path $distributionRoot 'SHA256SUMS.txt' } else { Join-Path $repositoryRoot 'SHA256SUMS.txt' }
+[System.IO.File]::WriteAllText($checksumPath,
     $portableHash + '  ' + [System.IO.Path]::GetFileName($portableZip) + "`n" + $sourceHash + '  ' + [System.IO.Path]::GetFileName($sourceZip) + "`n", $utf8)
+$releaseNotes = [System.IO.File]::ReadAllText((Join-Path $repositoryRoot 'CHANGELOG.md'))
+$noteHeaders = [regex]::Matches($releaseNotes, '(?m)^# Snapline ')
+if ($noteHeaders.Count -gt 1) { $releaseNotes = $releaseNotes.Substring(0, $noteHeaders[1].Index).Trim() }
 $updateFeed = @([ordered]@{
     tag_name = $releaseTag; draft = $false; prerelease = $true
-    body = [System.IO.File]::ReadAllText((Join-Path $repositoryRoot 'CHANGELOG.md'))
+    body = $releaseNotes
     assets = @([ordered]@{
         name = [System.IO.Path]::GetFileName($portableZip); state = 'uploaded'; size = (Get-Item -LiteralPath $portableZip).Length
         digest = 'sha256:' + $portableHash

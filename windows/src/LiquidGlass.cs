@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -60,18 +60,6 @@ namespace Snapline
                 }
             }
             catch (Win32Exception) { return null; }
-        }
-
-        // Prepare the diffusion once per opening, rather than blurring and
-        // copying a window-sized bitmap on every LocationChanged event.
-        internal BitmapSource Frosted(double radius)
-        {
-            var image = new Image { Source = Snapshot, Stretch = Stretch.Fill,
-                Effect = new System.Windows.Media.Effects.BlurEffect { Radius = radius, KernelType = System.Windows.Media.Effects.KernelType.Gaussian } };
-            var size = new Size(width / Scale, height / Scale);
-            image.Measure(size); image.Arrange(new Rect(size));
-            var result = new RenderTargetBitmap(width, height, 96 * Scale, 96 * Scale, PixelFormats.Pbgra32);
-            result.Render(image); result.Freeze(); return result;
         }
 
         internal BitmapSource Bevel(Rect area, double radius)

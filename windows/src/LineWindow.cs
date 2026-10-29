@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Automation;
@@ -15,17 +16,33 @@ namespace Snapline
 {
     internal sealed class LineWindow : Window
     {
-        internal const double PanelHeight = 234;
+        internal const double PanelHeight = 264;
         private readonly Controller controller;
         private readonly Canvas canvas = new Canvas();
         private readonly TranslateTransform slide = new TranslateTransform(0, -PanelHeight);
         private IntPtr handle;
         private int transition;
-        internal Button CaptureButton, LatestButton, PauseButton, SettingsButton;
+        internal Button CaptureButton, LatestButton, PauseButton, SettingsButton, ClearButton;
         internal TextBlock StatusText, HotkeyText;
         private TextBlock pauseLabel, pauseGlyph, countText;
         private Ellipse statusDot;
         private GlassBackdrop backdrop;
+        private readonly RopePhysics ropePhysics = new RopePhysics();
+        private readonly Stopwatch ropeClock = new Stopwatch();
+        private PointCollection ropePoints;
+        private ShotCard[] ropeCards = new ShotCard[0];
+        private ShotCard draggedCard;
+        private int knownCount, groupIndex, groupPart, capacity = ImageStore.ItemsPerGroup;
+        private int wheelDelta;
+        private DateTime lastWheel;
+        internal Button OlderButton, NewerButton, NewestButton;
+        internal TextBlock GroupText;
+        internal int GroupIndex { get { return groupIndex; } }
+        internal int GroupCount { get { return Math.Max(1, (controller.Store.Items.Count + ImageStore.ItemsPerGroup - 1) / ImageStore.ItemsPerGroup); } }
+        private Point dragOrigin;
+        private double dragFraction, ropeWidth, ropeSag;
+        private TimeSpan lastRopeFrame;
+        internal bool RopeAnimating { get; private set; }
         internal bool Revealed { get; private set; }
         internal Forms.Screen Display { get; private set; }
         internal System.Drawing.Rectangle PixelBounds { get; private set; }
@@ -46,6 +63,14 @@ namespace Snapline
             Height = PanelHeight;
             Content = canvas;
             canvas.RenderTransform = slide;
+            PreviewMouseWheel += delegate(object sender, System.Windows.Input.MouseWheelEventArgs e) {
+                if (!Revealed || controller.Busy) return;
+                e.Handled = true;
+                if ((DateTime.UtcNow - lastWheel).TotalMilliseconds > 250) wheelDelta = 0;
+                lastWheel = DateTime.UtcNow; wheelDelta += e.Delta;
+                if (Math.Abs(wheelDelta) < 120) return;
+                Browse(wheelDelta > 0 ? -1 : 1); wheelDelta = 0;
+            };
             SourceInitialized += delegate {
                 handle = new WindowInteropHelper(this).Handle;
                 Native.SetWindowLong(handle, Native.GWL_EXSTYLE,
@@ -53,6 +78,8 @@ namespace Snapline
                 HwndSource.FromHwnd(handle).AddHook(Hook);
             };
             SizeChanged += delegate { Rebuild(); };
+            IsVisibleChanged += delegate { if (!IsVisible) StopRope(); };
+            Closed += delegate { StopRope(); };
         }
 
         private IntPtr Hook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -74,7 +101,7 @@ namespace Snapline
             var element = InputHitTest(PointFromScreen(screenPoint)) as DependencyObject;
             while (element != null)
             {
-                if (element is ShotCard || element is Button) return true;
+                if (element is ShotCard || element is Button || (element is Border && ((Border)element).Name == "ScreenshotPager")) return true;
                 element = VisualTreeHelper.GetParent(element);
             }
             return false;
@@ -144,26 +171,42 @@ namespace Snapline
         {
             double width = ActualWidth > 0 ? ActualWidth : Width;
             if (double.IsNaN(width) || width < 1) return;
+            StopRope();
             canvas.Children.Clear();
-            var geometry = new StreamGeometry();
             double sag = Math.Min(30, width * 0.018);
-            using (var drawing = geometry.Open())
+            ropeWidth = width; ropeSag = sag;
+            ropePoints = new PointCollection(RopePhysics.Count - 1);
+            for (int i = 1; i < RopePhysics.Count; i++)
             {
-                drawing.BeginFigure(new Point(0, 10), false, false);
-                drawing.QuadraticBezierTo(new Point(width / 2, 10 + sag * 2), new Point(width, 10), true, false);
+                double fraction = (double)i / (RopePhysics.Count - 1);
+                ropePoints.Add(new Point(width * fraction, 10 + 4 * sag * fraction * (1 - fraction)));
             }
-            geometry.Freeze();
+            var segment = new PolyLineSegment { Points = ropePoints, IsStroked = true };
+            var figure = new PathFigure { StartPoint = new Point(0, 10), IsClosed = false, IsFilled = false };
+            figure.Segments.Add(segment);
+            var geometry = new PathGeometry(); geometry.Figures.Add(figure);
             var stroke = new LinearGradientBrush(new GradientStopCollection {
                 new GradientStop(Color.FromArgb(0, 195, 201, 208), 0), new GradientStop(Color.FromArgb(230, 195, 201, 208), 0.08),
                 new GradientStop(Color.FromArgb(230, 195, 201, 208), 0.92), new GradientStop(Color.FromArgb(0, 195, 201, 208), 1)
             }, new Point(0, 0), new Point(1, 0));
             canvas.Children.Add(new Path { Data = geometry, Stroke = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
-                StrokeThickness = 2.4, RenderTransform = new TranslateTransform(0, 1.4), IsHitTestVisible = false });
-            canvas.Children.Add(new Path { Data = geometry, Stroke = stroke, StrokeThickness = 1.2, IsHitTestVisible = false });
+                StrokeThickness = 2.4, RenderTransform = new TranslateTransform(0, 1.4), Width = width, Height = PanelHeight, IsHitTestVisible = false });
+            canvas.Children.Add(new Path { Data = geometry, Stroke = stroke, StrokeThickness = 1.2, Width = width, Height = PanelHeight, IsHitTestVisible = false });
             canvas.Children.Add(Toolbar(width));
 
-            int capacity = Math.Max(1, Math.Min(ImageStore.MaxItems, (int)((width - 96) / 174)));
-            var shots = controller.Store.Items.Skip(Math.Max(0, controller.Store.Items.Count - capacity)).ToArray();
+            capacity = width >= 680 ? ImageStore.ItemsPerGroup : Math.Max(1, (int)((width - 96) / 174));
+            int total = controller.Store.Items.Count;
+            if (total > knownCount || knownCount == 0) { groupIndex = GroupCount - 1; groupPart = int.MaxValue; }
+            knownCount = total;
+            groupIndex = Math.Max(0, Math.Min(groupIndex, GroupCount - 1));
+            int groupSize = Math.Min(ImageStore.ItemsPerGroup, total - groupIndex * ImageStore.ItemsPerGroup);
+            int parts = Math.Max(1, (groupSize + capacity - 1) / capacity);
+            groupPart = Math.Max(0, Math.Min(groupPart, parts - 1));
+            var shots = controller.Store.Items.Skip(groupIndex * ImageStore.ItemsPerGroup + groupPart * capacity).Take(Math.Min(capacity, groupSize - groupPart * capacity)).ToArray();
+            foreach (var item in controller.Store.Items) if (!shots.Contains(item)) item.Thumbnail = null;
+            double spacing = Math.Min(174, (width - 96) / Math.Max(1, shots.Length));
+            double cardScale = Math.Min(1, spacing / 174);
+            if (total > capacity) canvas.Children.Add(Pager(width, groupSize, parts));
             if (shots.Length == 0)
             {
                 var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -181,14 +224,72 @@ namespace Snapline
             }
             for (int i = 0; i < shots.Length; i++)
             {
-                double x = width / 2 - (shots.Length - 1) * 174 / 2 + i * 174;
+                double x = width / 2 - (shots.Length - 1) * spacing / 2 + i * spacing;
                 double fraction = x / width;
                 var card = new ShotCard(shots[i], controller, backdrop);
-                Canvas.SetLeft(card, x - card.Width / 2);
+                card.LayoutTransform = new ScaleTransform(cardScale, cardScale);
+                Canvas.SetLeft(card, x - card.Width * cardScale / 2);
                 Canvas.SetTop(card, 10 + 4 * sag * fraction * (1 - fraction) - 9.5);
                 canvas.Children.Add(card);
             }
+            ropeCards = canvas.Children.OfType<ShotCard>().ToArray();
             RefreshStatus();
+        }
+
+        internal bool Browse(int direction)
+        {
+            if (controller.Busy || direction == 0 || controller.Store.Items.Count == 0) return false;
+            int size = Math.Min(ImageStore.ItemsPerGroup, controller.Store.Items.Count - groupIndex * ImageStore.ItemsPerGroup);
+            int lastPart = Math.Max(0, (size - 1) / capacity);
+            if (direction < 0) {
+                if (groupPart > 0) groupPart--;
+                else if (groupIndex > 0) { groupIndex--; groupPart = int.MaxValue; }
+                else return false;
+            } else {
+                if (groupPart < lastPart) groupPart++;
+                else if (groupIndex < GroupCount - 1) { groupIndex++; groupPart = 0; }
+                else return false;
+            }
+            Rebuild();
+            if (SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast) foreach (var card in ropeCards) {
+                var offset = new TranslateTransform();
+                ((TransformGroup)card.RenderTransform).Children.Add(offset);
+                var motion = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.Stop };
+                motion.KeyFrames.Add(new DiscreteDoubleKeyFrame(direction * 24, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+                motion.KeyFrames.Add(new SplineDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(180)), new KeySpline(.23, 1, .32, 1)));
+                motion.Completed += delegate { offset.BeginAnimation(TranslateTransform.XProperty, null); };
+                offset.BeginAnimation(TranslateTransform.XProperty, motion);
+            }
+            return true;
+        }
+
+        private Border Pager(double width, int groupSize, int parts)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+            OlderButton = Ui.Button("‹", delegate { Browse(-1); });
+            NewerButton = Ui.Button("›", delegate { Browse(1); });
+            NewestButton = Ui.Button("最新", delegate {
+                if (controller.Busy) return;
+                groupIndex = GroupCount - 1; groupPart = int.MaxValue; Rebuild();
+            });
+            OlderButton.ToolTip = "更早的截图 · 向上滚动"; NewerButton.ToolTip = "更新的截图 · 向下滚动";
+            AutomationProperties.SetName(OlderButton, "查看更早的截图"); AutomationProperties.SetName(NewerButton, "查看更新的截图");
+            OlderButton.IsEnabled = groupIndex > 0 || groupPart > 0;
+            NewerButton.IsEnabled = groupIndex < GroupCount - 1 || groupPart < parts - 1;
+            NewestButton.IsEnabled = NewerButton.IsEnabled;
+            GroupText = Ui.Text("第 " + (groupIndex + 1) + " / " + GroupCount + " 组" +
+                (parts > 1 ? " · " + (groupPart * capacity + 1) + "–" + Math.Min(groupSize, (groupPart + 1) * capacity) + "/" + groupSize : " · " + groupSize + " 张"), 11, false);
+            GroupText.VerticalAlignment = VerticalAlignment.Center; GroupText.Margin = new Thickness(8, 0, 8, 0);
+            foreach (var button in new[] { OlderButton, NewerButton, NewestButton }) {
+                button.Style = (Style)Application.Current.FindResource("Bare"); button.Focusable = false;
+                button.Padding = new Thickness(8, 3, 8, 3); button.MinWidth = 30;
+            }
+            row.Children.Add(OlderButton); row.Children.Add(GroupText); row.Children.Add(NewerButton); row.Children.Add(NewestButton);
+            var bar = new Border { Name = "ScreenshotPager", Width = Math.Min(340, width - 32), Height = 28, CornerRadius = new CornerRadius(14),
+                Background = Ui.Brush("Surface"), BorderBrush = Ui.Brush("Line"), BorderThickness = new Thickness(1), Child = row,
+                ToolTip = "每组最多 9 张。滚轮向上看旧图，向下看新图；清空截图栏会取下全部分组，保留原文件。" };
+            Canvas.SetLeft(bar, (width - bar.Width) / 2); Canvas.SetTop(bar, 226);
+            return bar;
         }
 
         internal void PreviewBackdrop(BitmapSource image, double scale)
@@ -231,6 +332,8 @@ namespace Snapline
             pauseGlyph = (TextBlock)pauseContent.Children[0];
             pauseLabel = (TextBlock)pauseContent.Children[1];
             commands.Children.Add(PauseButton);
+            ClearButton = ToolbarButton("\uE74D", "清空截图栏（保留文件）", true, controller.ClearLine);
+            commands.Children.Add(ClearButton);
             SettingsButton = ToolbarButton("\uE713", "设置", compact, delegate { controller.ShowSettings("General"); });
             commands.Children.Add(SettingsButton);
             Grid.SetColumn(commands, 1); grid.Children.Add(commands);
@@ -265,6 +368,8 @@ namespace Snapline
             pauseGlyph.Text = paused ? "\uE768" : "\uE769";
             PauseButton.ToolTip = paused ? "恢复所有自动收集" : "暂停所有自动收集";
             LatestButton.IsEnabled = controller.Store.Items.Count > 0;
+            ClearButton.IsEnabled = controller.Store.Items.Count > 0;
+            ClearButton.ToolTip = "清空截图栏，保留原文件 · " + controller.Sink.ClearHotkeyText + (controller.Sink.ClearHotkeyRegistered ? "" : "（快捷键未启用）");
             HotkeyText.Text = controller.Sink.HotkeyRegistered ? controller.Sink.HotkeyText : "快捷键未注册";
         }
 
@@ -273,5 +378,77 @@ namespace Snapline
             var card = canvas.Children.OfType<ShotCard>().FirstOrDefault(item => item.Shot == shot);
             if (card != null) card.Copied();
         }
+
+        internal void NudgeRope()
+        {
+            if (!SystemParameters.ClientAreaAnimation) return;
+            ropePhysics.Kick();
+            StartRope();
+        }
+
+        internal void BeginRopeDrag(ShotCard card, Point origin)
+        {
+            if (!SystemParameters.ClientAreaAnimation) return;
+            draggedCard = card; dragOrigin = origin;
+            dragFraction = CardFraction(card);
+            ropePhysics.Pull(dragFraction, new Vector());
+            StartRope();
+        }
+
+        internal void EndRopeDrag()
+        {
+            draggedCard = null;
+            ropePhysics.Release();
+        }
+
+        private void StartRope()
+        {
+            if (RopeAnimating) return;
+            RopeAnimating = true;
+            lastRopeFrame = TimeSpan.Zero; ropeClock.Restart();
+            CompositionTarget.Rendering += RenderRope;
+        }
+
+        private void RenderRope(object sender, EventArgs args)
+        {
+            if (!SystemParameters.ClientAreaAnimation) { StopRope(); return; }
+            if (draggedCard != null)
+            {
+                var cursor = Native.Cursor();
+                ropePhysics.Pull(dragFraction, PointFromScreen(new Point(cursor.X, cursor.Y)) - dragOrigin);
+            }
+            TimeSpan now = ropeClock.Elapsed;
+            bool moving = ropePhysics.Step((now - lastRopeFrame).TotalSeconds);
+            lastRopeFrame = now;
+            PaintRope();
+            if (!moving) StopRope();
+        }
+
+        private void PaintRope()
+        {
+            if (ropePoints == null) return;
+            for (int i = 1; i < RopePhysics.Count; i++)
+            {
+                double fraction = (double)i / (RopePhysics.Count - 1);
+                var offset = ropePhysics.Sample(fraction);
+                ropePoints[i - 1] = new Point(ropeWidth * fraction + offset.X, 10 + 4 * ropeSag * fraction * (1 - fraction) + offset.Y);
+            }
+            foreach (var card in ropeCards)
+            {
+                double fraction = CardFraction(card);
+                card.FollowRope(ropePhysics.Sample(fraction));
+            }
+        }
+
+        private void StopRope()
+        {
+            if (RopeAnimating) CompositionTarget.Rendering -= RenderRope;
+            RopeAnimating = false; ropeClock.Stop(); draggedCard = null;
+            ropePhysics.Reset();
+            PaintRope();
+        }
+
+        private double CardFraction(ShotCard card)
+        { return (Canvas.GetLeft(card) + card.Width * card.LayoutTransform.Value.M11 / 2) / ropeWidth; }
     }
 }
