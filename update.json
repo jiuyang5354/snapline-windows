@@ -1,23 +1,23 @@
 [
   {
-    "tag_name": "v1.4.11",
+    "tag_name": "v1.5.0",
     "draft": false,
     "prerelease": true,
-    "body": "# Snapline v1.4.11 · PPT 文本框误收集修复（预发布）\n\n本版跟进 [Issue #2](https://github.com/jiuyang5354/snapline-windows/issues/2) 的新反馈。反馈者已确认 v1.4.10 解决了 Illustrator 复制时的报错。\n\n**本次改动**\n\n- 在 PowerPoint 中选中整个文本框复制时，Office 会在形状数据旁附带一份 PNG / 位图预览，旧版把这份预览当成截图收集。双击进入编辑模式只复制文字时剪贴板带文本格式，本来就会跳过。\n- 自动收集新增 Office / WPS 对象格式筛选（Art::GVML、PowerPoint 内部形状、Office Drawing、Kingsoft / WPS 形状）：文本框、形状、幻灯片对象在读取预览图之前跳过。代价是从 PPT / Word / Excel 中复制的图片对象也不再自动收集，需要时请用区域截图。\n- 浏览器“复制图片”、截图工具、画图等普通图片收集不受影响。软件内公告同步更新。\n\n**验证与范围**\n\n- 在 GitHub Actions Windows 环境构建：剪贴板专项 **64/64**（新增 8 项 Office / WPS 对象跳过与普通图片不误判回归）、原生接口只读专项 **4/4**、8K 位图 192 MiB 限额 **2/2**（峰值约 152 MiB）。\n- 未复现真实 PowerPoint / WPS 操作，未重跑安装器测试与全部键鼠回归，待反馈者验证。\n\n**下载和升级**\n\n- 安装版下载 `Snapline-Windows-Setup-v1.4.11.exe`，运行覆盖升级，保留截图和设置。\n- 便携版下载 `Snapline-Windows-v1.4.11.zip`，先退出旧版，再解压整个包。\n- Windows 10 / 11，需要 .NET Framework 4.8 或更高。仍为预发布版，未做代码签名。\n",
+    "body": "# Snapline v1.5.0 · 文件工作台 Beta 1（预发布）\n\n- 集成右侧文件暂存架：支持文件与文件夹、多文件叠、拆分、剪藏、拖入拖出和独立元数据；只记录现有文件路径，移出和清空保留原件。空架触碰主屏右边缘出现，有文件时显示浮动卡叠，裁切展开可中断。\n- 截图历史每 9 张一组，旧组隐藏保留，可用滚轮和箭头翻组；静态时最多保留当前组缩略图。顶部截图和右侧卡片提供有界弹簧反馈，保持原有玻璃材质。\n- 统一五种文件工具的原生 WPF 界面：PDF、转格式、图片压缩、批量重命名、ZIP；支持浅色 / 深色、QingIcon 矢量图标、短选中动效与主按钮局部 shader。颜色资源独立于截图栏，键盘与减少动效分支不等待过渡。\n- 跨工具携带真实文件路径，重命名同步截图历史、暂存架和当前列表；转换结果可加入暂存架。空会话支持添加文件，ZIP 可添加文件夹。忙碌期间不切换任务。\n- 第一批离线工具：WebP 有损 / 无损、图片单独 / 合并 PDF；PDF 合并、拆分、提取排序、删除、旋转、页码、中文矢量水印、设置 / 移除已知打开密码。另存并自动区分同名，后台处理可取消，合并失败不留下缺页结果。\n- 保留批量文件名模板与编号、JPEG / PNG 图片压缩、PNG / JPEG / BMP / TIFF 图片转换和文件 / 文件夹 ZIP。重命名冲突不覆盖，元数据保存失败回滚。\n- 补入 v1.4.11 的 Office / WPS 对象格式筛选，避免把 PPT 文本框和形状预览收成截图；这些应用复制的图片对象也会跳过，需要时请使用区域截图。\n- 保留清空截图栏快捷键、自定义截图快捷键、拖入接收框后保留截图、无人接收区域松开取下和 Esc 取消规则，以及实色六页设置和外观偏好。\n- PDF 窗口批量初始化只统一刷新一次；相同文件行状态不重复通知，保留打开速度修复。转换组件固定版本并随包提供，运行不下载组件、不上传文档。\n\n本版为预发布测试版。PDF 图片页没有 OCR；不处理交互表单或数字签名文档；WebP 需要 64 位 Windows。完整安装包与实际集成验证范围见 windows/QA.md。源码归档保留候选构建时的文档快照，当前发布状态以 GitHub Release 为准。",
     "assets": [
       {
-        "name": "Snapline-Windows-v1.4.11.zip",
+        "name": "Snapline-Windows-v1.5.0.zip",
         "state": "uploaded",
-        "size": 188484,
-        "digest": "sha256:8cee210789c8fc9f8879bf13e4a65fa8fdab7e5b82b263a2d3ba83a35025ebad",
-        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.11/Snapline-Windows-v1.4.11.zip"
+        "size": 1497025,
+        "digest": "sha256:218f437fe9a77987e53609436426d93f657a39b8a7afcb8fce5fe8ee4b6a4f2f",
+        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.0/Snapline-Windows-v1.5.0.zip"
       },
       {
-        "name": "Snapline-Windows-Setup-v1.4.11.exe",
+        "name": "Snapline-Windows-Setup-v1.5.0.exe",
         "state": "uploaded",
-        "size": 269629,
-        "digest": "sha256:c984669b562355cc892697e5f8c5de5d12b4e22386717a19deccdb4b20666d1e",
-        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.4.11/Snapline-Windows-Setup-v1.4.11.exe"
+        "size": 1540591,
+        "digest": "sha256:690259fe358c8c9c829e59da4f1f21a5ca1ee5fea60b98c884130a2f01c0439e",
+        "browser_download_url": "https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.0/Snapline-Windows-Setup-v1.5.0.exe"
       }
     ]
   }
