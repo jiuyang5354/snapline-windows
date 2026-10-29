@@ -1,102 +1,133 @@
 [中文](README.md) | **English**
 
-# Snapline — screenshot clothesline for Windows
+# Snapline · Screenshot clothesline and file shelf
 
-An unofficial Windows implementation of [Tendedero](https://github.com/alejandrobujan/tendedero) by [Alejandro Buján](https://github.com/alejandrobujan), using C# / WPF and Win32. It hangs screenshots along the top of the screen for copying, previewing, editing, and dragging into other apps. This project has its own name and icon and is not endorsed by the upstream author.
+Keep screenshots at the top of your screen and temporary files within reach.
 
-**v1.5.1 Beta 2 adds quiet capture and WPS compatibility protection.** Disable automatic reveal in General settings to keep collecting without opening the clothesline; hover, hotkeys and the tray still work. WPS clipboard-owner filtering supplements object-format checks; the customer environment still needs confirmation. It includes a floating file shelf, screenshot history in groups of nine, batch rename, image conversion and compression, ZIP, WebP and offline PDF tools. The five tool windows share light/dark appearance and carry input files between tools. It retains the v1.4.11 Office/WPS object-clipboard filter. This is a prerelease for testing; see [QA](windows/QA.md) for completed checks and remaining device validation.
+Snapline is a Windows desktop utility for collecting screenshots, browsing image history, staging files by drag and drop, and processing images, PDFs, filenames and ZIP archives locally. Reveal it from the screen edge, a hotkey or the tray when needed.
 
-![Snapline Windows preview](docs/preview.png)
-
-The actual WPF screenshot bar is shown on a generated presentation background. Glass is limited to screenshot containers; empty areas remain transparent.
-
-![Unified settings](docs/settings.png)
-
-The image above shows an earlier settings window. v1.5 uses six solid-background settings pages with light, dark and system appearance. Screenshot containers retain their original glass effect; PDF and file processing use the new native workbench.
+This is an **unofficial Windows implementation of [Tendedero](https://github.com/alejandrobujan/tendedero) by [Alejandro Buján](https://github.com/alejandrobujan)**, published and maintained by [jiuyang5354](https://github.com/jiuyang5354). It uses its own name and icon and is not an official release or endorsement by the upstream author.
 
 ## Download
 
-- [Windows installer](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Setup-v1.5.1.exe)
-- [Portable package](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-v1.5.1.zip)
-- [Buildable source](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Source-v1.5.1.zip)
-- [Installer source and verification](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Installer-Source-v1.5.1.zip)
-- [Installer SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/SHA256SUMS-Setup.txt)
-- [Release notes and checksums](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.5.1)
+Current version: **v1.5.1 Beta 2 · prerelease for testing**. Requires **Windows 10/11 and .NET Framework 4.8 or later**. WebP tools require 64-bit Windows.
 
-Requires Windows 10/11 and .NET Framework 4.8 or later. No administrator rights are needed.
+| Package | Use |
+| --- | --- |
+| **[EXE installer](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Setup-v1.5.1.exe)** | Recommended for most users. Creates a desktop shortcut by default and supports installation over an older version. |
+| **[Portable ZIP](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-v1.5.1.zip)** | Exit the old app, extract the entire package and run `Snapline.exe`. |
+| [Application source](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Source-v1.5.1.zip) · [Installer source](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Installer-Source-v1.5.1.zip) | Review or build the project. |
+| [Installer checksums](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/SHA256SUMS-Setup.txt) · [Portable and source checksums](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/SHA256SUMS.txt) | SHA-256 verification. |
 
-The installer defaults to `%LOCALAPPDATA%\Programs\Snapline`, provides Start menu and uninstall entries, and lets you choose a desktop shortcut. Startup at login is off by default. Uninstalling preserves screenshots and settings; see the [installer guide](windows/INSTALLER.zh-CN.md).
+[Release notes](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.5.1) · **[Previous versions](docs/VERSIONS.md)** · [Issues and suggestions](https://github.com/jiuyang5354/snapline-windows/issues)
 
-For portable use, extract the entire ZIP and run `Snapline.exe`. The app remains in the tray, possibly under hidden icons. It is unsigned, so Windows may show an unknown-publisher warning.
+The installer defaults to `%LOCALAPPDATA%\Programs\Snapline` and lets you choose another directory. Upgrades preserve screenshots, settings, shelf records and existing shortcuts. Startup at login is off by default. Builds are unsigned, so Windows may display an unknown-publisher warning. See the [installer guide](windows/INSTALLER.zh-CN.md).
 
-A [GitHub Packages NuGet package](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows) is also available as `jiuyang5354.Snapline.Windows`, version `1.5.1-preview`. Its app files are under `tools/Snapline/`; downloading requires package authentication. Most users should choose the installer or portable ZIP. See [package guidance](windows/PACKAGE-README.md).
+## Features
 
-## Use
+### Screenshot clothesline
 
-1. Capture with Win+Shift+S or copy an image.
-2. Hover at the screen top, click the tray icon, or press Ctrl+Alt+T to expand the clothesline.
-3. The toolbar offers region capture, copying the latest image, pausing collection, and settings.
-4. Click an image to copy, double-click to preview, hold for about 0.45 seconds to edit in Paint, or drag into another app.
-5. Exit from the tray menu.
+Screenshots and copied images hang along the top of the screen, with transparent gaps, glass containers, metal clips and subtle physical feedback. Click to copy, double-click to preview, hold for about 0.45 seconds to edit in Paint, or drag into an application that accepts images or files.
 
-If Ctrl+Alt+T is occupied, Snapline tries Ctrl+Alt+Shift+T. If both are unavailable, use the tray or hover. See the [Chinese usage guide](windows/README.zh-CN.md).
+- **History in groups of nine:** new images enter the latest group; use the wheel and arrows to browse earlier groups. History survives restart.
+- **Quiet collection:** turn off automatic reveal in General settings. Images continue to save without opening the clothesline.
+- **Custom shortcuts:** configure show/hide, region capture and clearing all screenshot groups separately.
+- **Hover actions:** point at an image and press `C` to copy, `A` to edit or `D / Delete` to remove it.
+- **Region capture:** select an area, optionally include the pointer, or press `Esc` to cancel.
 
-### Hover actions and region capture
+![Screenshot clothesline illustration](docs/preview.png)
 
-Hover an image and press C to copy, A to edit in Paint, or D/Delete to remove. Holding a key does not remove neighboring images. Keyboard input stays with the original app when the pointer leaves, the shelf closes, another operation is active, or Ctrl/Alt/Shift/Win is held.
+The clothesline is shown on a generated presentation background using test images. Gaps remain transparent and the screenshot content itself is not filtered by the glass effect.
 
-Choose Region capture from the toolbar or tray. Normally, releasing the drag saves a PNG and copies it. With **Settings → Capture → Include mouse pointer → Save** enabled, draw the region, position the pointer, then press Enter. Escape cancels; drag again to redraw. Manual capture works while automatic collection is paused.
+### Floating file shelf
 
-![Pointer capture setting](docs/capture.png)
+The stack on the primary screen's right edge stages files and folders, supports multi-file stacks, an expanded grid, drag in/out, and text, link and image clippings.
 
-## Updates and collection settings
+- An empty shelf hides offscreen and appears after hovering at the right edge; a populated shelf stays visible as a stack.
+- Hover or click to expand. Opening and closing transitions can be interrupted.
+- Staged files and folders retain their original paths. Removing entries or clearing the shelf preserves the originals.
+- Select files in the expanded shelf to open rename, conversion, compression, ZIP or PDF tools.
 
-- Automatic checks, including prereleases, are enabled by default: about 15 seconds after startup, then at most once every 24 hours. A version is announced once; manual checks remain available when automatic checks are off.
-- Installed copies download and verify an EXE, then open the upgrade wizard when you choose Install update. Portable copies download a ZIP. Both validate size and SHA-256.
-- Pausing collection covers clipboard and folder images, persists across restarts, and skips images created while paused. Existing images and manual additions still work.
-- Copy latest is available without expanding the shelf, and is disabled when empty.
-- Startup at login is opt-in for the current user. Re-enable it after moving a portable installation to refresh the path.
+### Offline file tools
 
-In-app updates in v1.3.2 and earlier download only ZIPs. Installed users must run a newer installer once; subsequent in-app updates select the EXE. The installer replaces files after the old process exits and preserves the data folder, custom shortcut arguments, and startup entry. Portable users should exit before extracting an update.
+The five workbench modes share light/dark appearance and carry the current file list between tools. Outputs can join the file shelf; renaming updates screenshot history and shelf paths.
 
-Update checks read this repository's public version file from `raw.githubusercontent.com`; downloads use GitHub and its asset CDN. The app sends its version but no screenshots, clipboard content, local paths, account data, or telemetry. Failed, canceled, or unverified downloads do not replace saved packages. Other apps and Windows clipboard sync retain their own data policies.
+| Tool | Available operations |
+| --- | --- |
+| Batch rename | Original-name and sequence-number templates, preview and conflict checks; confirmation changes the source filenames. |
+| Image conversion | PNG, JPEG, BMP, TIFF and static WebP, including lossy/lossless WebP output. |
+| Image compression | JPEG quality and image long-edge limits; PNG can retain transparency. Results are saved separately. |
+| ZIP | Package selected files and folders into a new archive. |
+| Images to PDF | Individual image PDFs or multiple images combined into one PDF. |
+| PDF pages | Merge, split, extract/reorder, delete, rotate, page numbers, text watermarks, set an opening password, or remove protection with the known password. |
 
-## Data and behavior
+Processing stays on the computer without uploading documents. Conversion and ZIP results are saved separately with collision-safe names, and background work can be canceled. Compression does not guarantee a smaller result; animated and multi-frame images are not supported.
 
-- By default, Snapline collects PNG/bitmap clipboard images, not just screenshots. It skips text, tables, rich text, and recognized Illustrator/AICB/PDF/SVG vector mixtures before reading them as image data. Ordinary images with accompanying HTML can still be collected. Disable clipboard collection to monitor a folder only.
-- Default inbox: `%LOCALAPPDATA%\Snapline\Inbox`; settings: `%LOCALAPPDATA%\Snapline\settings.json`. Changing the inbox does not move older images. The latest 12 are restored; older files remain on disk for manual cleanup.
-- Clicking X or pressing D/Delete sends images in the current/default inbox to the Recycle Bin. Images in earlier custom inboxes or external locations are removed only from the display. Remove all preserves files.
-- The target app determines copy/move behavior when dragging out. Moving may remove the original file from its source directory.
-- Snapline does not intercept system screenshot shortcuts or alter screenshot-tool autosave settings.
-- Glass rims refract a background sampled before expansion and reposition it with container tilt, sway, and scale. Samples stay in memory and refresh on reopening, not every video frame. Screenshot content is rendered independently. Transparency-off and high-contrast modes use solid borders.
+**Scope:** image PDFs do not include OCR. Office conversion, PDF compression, OCR and digital signing are not available yet; interactive forms and digitally signed PDFs are not processed. Common PDF tasks support up to 512 pages, and merges accept up to 200 files with 128 MB of combined input. See the [PDF tools plan](windows/PDF-TOOLS-PLAN.zh-CN.md).
 
-## Build and validation
+### Settings and everyday controls
 
-From the repository root, use Windows PowerShell or PowerShell 7:
+Choose light, dark or system appearance; pause collection, copy the latest screenshot, change the inbox, opt into startup at login, check for updates or reopen release announcements.
+
+![v1.5.1 General settings](docs/screenshots/settings-v1.5.1-light.png)
+
+Captured from an isolated v1.5.1 test instance. Settings use a solid background while screenshot containers retain their glass appearance. The switch states are test examples.
+
+## Quick start
+
+1. Install or extract the full package and run `Snapline.exe`. The app stays in the system tray.
+2. Capture with `Win + Shift + S`, copy an image or use Snapline's region capture.
+3. Hover at the screen top, click the tray icon or press `Ctrl + Alt + T` to reveal the clothesline.
+4. Drag temporary files to the right-hand shelf and open a processing tool from its expanded panel.
+5. Save changes to shortcuts, appearance, collection and storage in Settings.
+
+| Default action | Shortcut |
+| --- | --- |
+| Show/hide screenshot bar | `Ctrl + Alt + T` |
+| Region capture | `Ctrl + Alt + S` |
+| Clear all screenshot groups, preserving original files | `Ctrl + Alt + Backspace` |
+
+Change these in Settings → Shortcuts. If the default show shortcut is occupied, Snapline tries a fallback and shows the active binding in the tray. The tray icon may be under hidden icons.
+
+## Files, drag and drop, and privacy
+
+- Screenshots default to `%LOCALAPPDATA%\Snapline\Inbox`; settings are in `%LOCALAPPDATA%\Snapline\settings.json`. Changing the inbox does not move existing images.
+- **Removing one image differs from clearing all:** the close button or `D / Delete` sends images in the current/default inbox to the Recycle Bin. External images and images in an old custom inbox only leave the clothesline. Clearing all screenshot groups preserves original files.
+- Successful drops into accepting applications copy the image and retain its card. A drop into a nonaccepting area removes the card by default while preserving the file; `Esc` keeps the card. The nonaccepting-drop behavior can be disabled.
+- The target must accept images/files. Snapline and the target should run at the same privilege level; elevated chat applications may reject drops from a normal process.
+- Clipboard collection also includes qualifying copied images, not just screenshots. It can be disabled separately or paused with all automatic collection.
+- Known text, tables, vector content and Office/WPS object previews are skipped. v1.5.1 also checks the WPS clipboard owner, so **ordinary images copied from WPS are skipped too**; use region capture when needed. The reporter's WPS environment still needs confirmation; see [Issue #2](https://github.com/jiuyang5354/snapline-windows/issues/2).
+- Screenshot, shelf and processing content is not uploaded. Update checks read GitHub's public update file and downloads use GitHub and its asset CDN. Screenshots, clipboard content and local paths are not sent.
+
+## Updates and previous versions
+
+Automatic checks are on by default and **include prereleases**: an attempt occurs about 15 seconds after startup and at most once every 24 hours. Manual checks are available in the tray. Downloads validate size and SHA-256; installed users confirm the EXE upgrade, while portable users exit before extracting the full ZIP.
+
+**Earlier Releases, installers, portable packages, source archives, checksums and tags remain available.** The [version index](docs/VERSIONS.md) lists their downloads and the [changelog](CHANGELOG.md) retains changes. Back up screenshots, settings and shelf records before reverting.
+
+The previous introduction remains in Git history: [earlier English README](https://github.com/jiuyang5354/snapline-windows/blob/d39864addb2f2d050e441b73e36cadace6b3a8ad/README.en.md).
+
+## Validation and feedback
+
+v1.5.1 passed quiet-collection, clipboard format/source, constrained-memory, settings/motion, tool-integration and installation/upgrade/uninstall checks. Automated checks do not cover every user environment; the WPS report, other devices, multiple monitors and different scaling still need field feedback. See [QA](windows/QA.md).
+
+When opening an [issue](https://github.com/jiuyang5354/snapline-windows/issues), include the app version, Windows version, steps and exact error. Startup reports can include `diagnostics.log`; clipboard reports can include `clipboard-error.log` from the app data folder. Private documents, design source files and complete settings files are not needed.
+
+## Build
+
+The application uses **C#, WPF, Win32 and .NET Framework 4.8**. From the repository root:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\build.ps1
 ```
 
-Output: `windows/bin/Snapline.exe`. The build uses the system .NET Framework C# compiler without third-party runtime dependencies. Install the .NET Framework 4.8 Developer Pack if the compiler is missing.
+Output is in `windows/bin/`. Keep the configuration and entire `Converters` directory beside the executable. The build downloads pinned conversion dependencies and checks SHA-256; release packages already include them. Building requires the appropriate .NET Framework development components; installer packaging also requires NSIS 3.13. See the [build and installer guide](windows/INSTALLER.zh-CN.md).
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\build.ps1 -Test
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\package.ps1
-```
+A [GitHub Packages / NuGet package](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows) is available as `1.5.1-preview` and requires GitHub package authentication. Most users should choose the EXE or ZIP; developers can use the [package guide](windows/PACKAGE-README.md).
 
-Tests temporarily use the system clipboard and restore readable original formats afterward. Pause copying during these tests. Generated images and state use independent directories under `windows/qa/output/`.
+## Attribution and license
 
-`build.ps1 -Storage` checks historical-image recovery, deduplication, and constrained memory with generated regular, transparent, and 8K images. Separate subprocesses have a 192 MiB limit; this check does not read user data or operate the mouse, keyboard, or clipboard.
-
-Installer packaging also requires [NSIS 3.13](https://nsis.sourceforge.io/Download). Extract its official ZIP under `windows/.tools/`, place the released portable ZIP under `windows/`, and run `windows/package-installer.ps1 -Test`. It verifies the portable package and outputs the installer, installer-source ZIP, and checksums. Results are in `windows/qa/output/installer/installer-results.json`.
-
-For releases, `package.ps1` generates the ZIP, checksums, and `windows/dist/update.json`; installer packaging adds EXE metadata. Upload and verify all assets before publishing root `update.json`. Keep ZIP metadata for older clients and match the prerelease flag to the actual release. The Publish Windows package workflow verifies downloaded assets, EXE version, checksums, package linkage, visibility, and portable-file contents before and after publishing. See [workflow runs](https://github.com/jiuyang5354/snapline-windows/actions/workflows/publish-package.yml).
-
-## Upstream and license
-
-Upstream: [alejandrobujan/tendedero](https://github.com/alejandrobujan/tendedero), by Alejandro Buján; reference commit [`3c866d94d25ee9d1e008aecd9a78a4e9b2bf06a4`](https://github.com/alejandrobujan/tendedero/commit/3c866d94d25ee9d1e008aecd9a78a4e9b2bf06a4).
-
-The Windows implementation uses C# 5, WPF, .NET Framework 4.8, and Win32. The upstream MIT license does not cover the original project name, icon, or promotional images. Snapline uses its own name/icon, excludes those assets, and does not imply upstream endorsement.
-
-See [UPSTREAM-LICENSE.txt](UPSTREAM-LICENSE.txt), [LICENSE](LICENSE), and [NOTICE.md](NOTICE.md).
+- **Tendedero author:** [Alejandro Buján](https://github.com/alejandrobujan), [upstream project](https://github.com/alejandrobujan/tendedero), reference commit `3c866d94d25ee9d1e008aecd9a78a4e9b2bf06a4`.
+- **Windows publication and maintenance:** [jiuyang5354](https://github.com/jiuyang5354). This repository publishes the Windows implementation and is not the upstream author's official Windows release.
+- The Windows implementation uses the [MIT license](LICENSE) and retains the [upstream license](UPSTREAM-LICENSE.txt). The upstream name, icon and its `docs/` images are outside that MIT grant; this project uses its own name, icon and generated demonstration material.
+- File-shelf origins, PDFsharp, WebP, QingIcon and design references are documented in [NOTICE.md](NOTICE.md). Each component's license and notices are retained in the package.

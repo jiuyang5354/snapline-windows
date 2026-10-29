@@ -1,125 +1,133 @@
 **中文** | [English](README.en.md)
 
-# Snapline · 截图晾衣绳 Windows 版
+# Snapline · 截图晾衣绳与文件暂存架
 
-Snapline 是 [Tendedero](https://github.com/alejandrobujan/tendedero) 的**非官方 Windows 移植版**。原项目作者为 **[Alejandro Buján](https://github.com/alejandrobujan)**；本仓库由 [jiuyang5354](https://github.com/jiuyang5354) 发布 Windows 实现。它把截图挂在屏幕顶部，方便复制、预览、编辑和拖入其他应用。
+把截图挂到屏幕顶部，把临时文件放到手边。
 
-An unofficial Windows implementation of Tendedero by Alejandro Buján, using C# / WPF and Win32. This project uses its own name and icon and is not endorsed by the upstream author.
+Snapline 是一款 Windows 桌面工具：收集截图、翻看历史图片、拖拽暂存文件，并在本地完成图片转换、PDF 处理、批量重命名和 ZIP 打包。平时收起，需要时通过屏幕边缘、快捷键或托盘展开。
 
-**v1.5.1 Beta 2：静默收集与 WPS 兼容。** 设置 → 常规可关闭“收集新截图时自动展开”，继续保存截图，顶部悬停、快捷键及托盘仍可展开。新增 WPS 剪贴板拥有者来源保护；反馈者现场仍需复测。 新增侧边浮动文件暂存架、每 9 张截图一组的历史翻页，以及图片转格式、WebP、PDF 工具、批量重命名、图片压缩和 ZIP。五种工具使用统一的原生 WPF 界面，支持浅色 / 深色和跨工具携带文件；保留 v1.4.11 的 Office / WPS 对象筛选修复。原文件默认保留，重命名会先预览。本版为预发布测试版，已完成隔离安装、覆盖升级和工具集成验证，实际范围与待验证项目见 [验证记录](windows/QA.md)。
+本项目是 **[Alejandro Buján](https://github.com/alejandrobujan) 的 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 实现**，由 [jiuyang5354](https://github.com/jiuyang5354) 发布与维护。使用独立名称和图标，不代表原作者官方版本或背书。
 
-![Snapline Windows 窗口预览](docs/preview.png)
+## 下载
 
-上图是实际 WPF 截图栏放在展示背景上的效果；截图与背景由程序生成。截图栏的液态玻璃用于每张截图的容器，空白区域保持透明。
+当前版本：**v1.5.1 Beta 2 · 预发布测试版**。适用于 **Windows 10 / 11，需要 .NET Framework 4.8 或更高版本**；WebP 工具需要 64 位 Windows。
 
-![Snapline 统一设置窗口](docs/settings.png)
-
-上图为旧版设置窗口示意。v1.5 使用实色六页设置，支持浅色、深色和跟随系统；截图容器继续保留原有玻璃效果。PDF 和文件处理使用统一的原生工作台，完整功能见 [中文使用指南](windows/README.zh-CN.md)。
-
-## 下载和运行
-
-- [下载 Windows EXE 安装包（默认创建桌面图标）](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Setup-v1.5.1.exe)
-- [下载 Windows 便携包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-v1.5.1.zip)
-- [下载可编译源码包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Source-v1.5.1.zip)
-- [安装器源码与验证记录](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Installer-Source-v1.5.1.zip) · [安装包 SHA-256](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/SHA256SUMS-Setup.txt)
-- [发布说明与 SHA-256 校验文件](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.5.1)
-
-**安装版：** 双击 EXE，按中文向导安装。“创建桌面快捷方式”默认勾选，可取消；同时提供开始菜单入口和卸载入口。默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，只安装给当前用户，不需要管理员权限。开机启动默认关闭。卸载保留原来的截图和设置，完整说明见 [安装版指南](windows/INSTALLER.zh-CN.md)。
-
-另提供 [GitHub Packages 软件包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，包名为 `jiuyang5354.Snapline.Windows`，本版对应 NuGet 版本为 `1.5.1-preview`。NuGet 包中的程序位于 `tools/Snapline/`，下载需要 GitHub 软件包认证；具体操作见 [软件包指南](windows/PACKAGE-README.md)。普通用户可选上面的 EXE 安装包或便携 ZIP。
-
-目标系统为 **Windows 10 / 11，需 .NET Framework 4.8 或更高版本**。解压整个便携包，双击其中的 `Snapline.exe`。程序不需要管理员权限；运行后驻留系统托盘，图标也可能在“隐藏图标”菜单中。
-
-当前程序未作代码签名，Windows 可能提示未知发布者。源码和编译脚本已公开，可以自行编译。
-
-## 使用方法
-
-1. 使用 `Win + Shift + S` 截图，或复制一张图片。
-2. 在屏幕顶部悬停，点击托盘图标，或按 `Ctrl + Alt + T` 展开。
-3. 顶部工具条可直接区域截图、复制最近一张、暂停/恢复收集，或打开统一设置。
-4. 单击图片复制，双击用默认图片应用预览，按住约 0.45 秒用画图编辑，也可以拖入其他应用。
-5. 从托盘右键菜单选择“退出”关闭程序。
-
-如果 `Ctrl + Alt + T` 已被占用，程序会尝试 `Ctrl + Alt + Shift + T`；两个组合键都被占用时，仍可通过托盘和顶部悬停操作。完整操作说明见 [中文使用指南](windows/README.zh-CN.md)。
-
-## v1.4.0 悬停快捷操作与区域截图
-
-鼠标指向某张截图时，可按 **C 复制、A 用画图编辑、D / Delete 取下**。无需先单击图片，按住不会连续取下相邻图片。鼠标离开截图、截图栏收起、设置或其他操作进行中时，按键交给原应用；Ctrl / Alt / Shift / Win 组合不触发这些操作。自定义“显示 / 隐藏”快捷键保持原有行为。
-
-在工具条或托盘选择 **区域截图…**，拖动框选；默认松开鼠标即保存 PNG 并复制。进入 **设置 → 截图 → 截图包含鼠标指针 → 保存** 后，先框选，再把指针放到需要的位置，按 **Enter** 截图。**Esc** 取消，拖动可重新框选。暂停自动收集时也可主动截图。
-
-![截图与鼠标指针设置](docs/capture.png)
-
-鼠标开关默认关闭，仅用于 Snapline 自带的区域截图；`Win + Shift + S` 和其他截图软件仍由它们自己控制。区域框选使用开始时的桌面快照，摆放鼠标时背景保持不动。
-
-## 自定义快捷键
-
-截图栏 → **设置 → 快捷键**，或右键系统托盘图标 → **设置快捷键…** → 在对应输入框按下想绑定的按键 → **保存**。显示 / 隐藏默认 `Ctrl + Alt + T`；区域截图默认 `Ctrl + Alt + S`。两组分别设置，保存后立即生效，重启后继续使用。
-
-支持普通单键、功能键，以及 Ctrl / Alt / Shift / Win 与一个普通按键的组合，例如 `F8`、`Ctrl + Shift + Space`。可点击输入框重新录入，或选择“恢复默认”后保存；取消会保留原绑定。
-
-单键会占用其他应用中的同名按键；绑定字母或数字时建议使用组合键。修饰键须搭配普通按键，F12 为系统保留键。两组不能相同；已被占用或保存失败时保留原绑定。显示快捷键启动失败时尝试默认和备用组合；区域截图键启动失败时提示重新设置，仍可从工具条或托盘截图，保存的偏好仍保留。
-
-## 更新与便捷操作
-
-顶部工具条和统一设置窗口可使用常用操作，托盘菜单保留原有入口：
-
-| 功能 | 使用与默认状态 |
+| 下载内容 | 适合谁 |
 | --- | --- |
-| 自动检查更新（含预发布） | 默认开启。启动约 15 秒后检查，之后每 24 小时最多检查一次；同一版本只提醒一次。可关闭，手动检查仍可用。 |
-| 检查更新 / 更新到新版本 | 安装版下载并校验 EXE，完成后点击“安装更新”打开覆盖安装向导；便携版下载 ZIP。通知不可见时也可从托盘打开。另有“打开版本发布页”入口。 |
-| 暂停所有自动收集 | 同时暂停剪贴板图片和文件夹新图片，重启后保持暂停。取消勾选后恢复，跳过暂停期间的图片。已有图片仍可复制、预览，也可手动挂入。 |
-| 复制最近一张 | 无须展开晾衣绳，直接复制当前列表最近一张图片；没有图片时禁用。 |
-| 开机启动 | 默认关闭，仅在勾选后设置当前 Windows 用户登录时启动，不需要管理员权限。移动或重新解压程序后请重新勾选，以更新路径。 |
+| **[EXE 安装包](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Setup-v1.5.1.exe)** | 普通用户。默认创建桌面快捷方式，支持覆盖旧版安装。 |
+| **[便携版 ZIP](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-v1.5.1.zip)** | 希望自行选择程序目录的用户。退出旧版后完整解压，再运行 `Snapline.exe`。 |
+| [程序源码](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Source-v1.5.1.zip) · [安装器源码](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Installer-Source-v1.5.1.zip) | 开发、审阅或自行构建。 |
+| [安装包校验文件](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/SHA256SUMS-Setup.txt) · [便携包与源码校验文件](https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/SHA256SUMS.txt) | 核对 SHA-256。 |
 
-**升级到 v1.3.3：** v1.3.2 及更早版本的程序内更新仍只下载 ZIP，安装版请先从上方链接下载新版 EXE，运行一次完成覆盖升级。之后安装版的程序内更新会选择 EXE，下载并校验后点击“安装更新”，在安装向导中确认。安装器默认在原目录覆盖，旧进程正常退出后再替换文件，应用列表保留一份登记；已有快捷方式的自定义数据目录参数与开机启动项保留。便携版继续下载 ZIP，需先退出旧版再解压。截图、列表及自定义快捷键仍在原数据目录。
+[本版更新公告](https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.5.1) · **[历史版本下载](docs/VERSIONS.md)** · [问题与建议](https://github.com/jiuyang5354/snapline-windows/issues)
 
-更新仅读取本仓库公开的版本文件，并在点击下载时访问 GitHub 发布包。程序校验包的大小与 SHA-256，下载取消、失败或校验不通过时不会替换已保存的包。离线检查静默失败，手动检查会提示；不需要登录 GitHub。
+安装器默认安装到 `%LOCALAPPDATA%\Programs\Snapline`，也可以选择其他目录。覆盖升级保留截图、设置、暂存记录和已有快捷方式；开机启动默认关闭。程序未作代码签名，Windows 可能提示未知发布者。完整安装说明见 [安装指南](windows/INSTALLER.zh-CN.md)。
 
-## 使用注意事项
+## 能做什么
 
-- **默认收集剪贴板中的 PNG 或位图，不仅是截图。** 带文字、表格、富文本或已识别的 Illustrator / AICB / PDF / SVG 矢量格式时跳过，不主动把这些混合内容当图片读取；普通图片附带 HTML 仍可收集。可在托盘关闭“收集剪贴板图片”，改为只监听指定文件夹。混合内容如需截图，可使用区域截图。
-- 收集的图片默认保存在 `%LOCALAPPDATA%\Snapline\Inbox`，设置在 `%LOCALAPPDATA%\Snapline\settings.json`。设置 → 存储 → 更改位置可选择新收件夹，保存后生效；重新选择默认目录可恢复默认。旧图片不搬迁。截图历史按每 9 张一组保存，可用滚轮和箭头查看旧组，重启可恢复；旧版已移出历史记录的文件不会自动重新挂入。
-- 点击图片叉号，或悬停时按 `D / Delete`，会把当前收件夹或默认收件夹内的图片送入回收站；旧自定义收件夹及外部图片只从展示列表取下，保留原文件。“全部取下”保留文件。
-- 截图拖入支持图片或文件的应用时使用复制，接收成功后保留卡片；拖到无人接收区域松开时默认只取下卡片，保留原文件，Esc 取消保留。暂存架移出和清空也保留原件。目标应用与 Snapline 的权限级别需要一致；以管理员运行的聊天软件可能无法接收普通权限程序的拖放。
-- 更新检查会向 `raw.githubusercontent.com` 请求本仓库的公开版本文件；点击下载会访问 GitHub 与其发布文件 CDN。请求包含程序版本，不上传截图、剪贴板内容或本地路径，也没有账号或遥测。关闭自动检查后，仅主动检查或下载时才联网。Windows 剪贴板同步及接收图片的其他应用仍按各自设置处理数据。
-- 程序不接管系统截图快捷键，不修改截图工具的自动保存设置。开机启动默认关闭，可在托盘开启或关闭；便携程序移动后需更新注册路径。
-- 截图容器的玻璃边缘会折射展开前采样的桌面背景，并跟随容器的倾斜、摆动和缩放定位。背景样本仅在内存中，收起后重新展开时刷新；背后的视频或窗口内容变化不会逐帧更新折射。截图图像独立显示，不经过玻璃滤镜。系统关闭透明效果或启用高对比度时使用实色外框；预发布验证范围以 [QA.md](windows/QA.md) 为准。
+### 截图晾衣绳
 
-## 编译
+截图和复制的图片挂在屏幕顶部，沿用透明空白、玻璃容器、金属夹子与轻微物理反馈。单击复制、双击预览、长按约 0.45 秒用画图编辑，也可以拖入支持图片或文件的其他应用。
 
-使用 Windows PowerShell 或 PowerShell 7，在仓库根目录运行：
+- **每 9 张一组**：新截图进入最新组，旧组保留，可用滚轮和箭头翻看，重启后恢复。
+- **静默收集**：设置 → 常规 → 关闭“收集新截图时自动展开”。继续保存截图，只在需要时主动展开。
+- **自定义快捷键**：分别设置显示 / 隐藏、区域截图和清空截图栏的按键。
+- **悬停操作**：鼠标指向截图时，按 `C` 复制、`A` 编辑、`D / Delete` 取下。
+- **区域截图**：框选区域保存，也可选择包含鼠标指针；`Esc` 取消。
+
+![截图晾衣绳示意](docs/preview.png)
+
+截图栏在生成的展示背景上呈现；图片为测试样例。容器之间保持透明，截图内容不经过玻璃滤镜。
+
+### 文件暂存架
+
+主屏右侧的浮动卡叠用于暂存文件和文件夹，支持多文件叠、展开网格、拖入拖出，以及文字、链接和图片剪藏。
+
+- 空架默认藏到屏幕外，鼠标在右侧边缘停留后出现；有文件时显示卡叠。
+- 悬停或点击展开，可随时中断展开、收起的过程。
+- 文件与文件夹只记录原路径；移出暂存架或清空列表保留原件。
+- 在展开面板中选择文件，进入重命名、转格式、压缩、ZIP 或 PDF 工具。
+
+### 离线文件工具
+
+五种工具共用原生工作台，支持浅色 / 深色，并携带当前文件列表切换。转换结果可加入暂存架，重命名后同步截图历史与暂存路径。
+
+| 工具 | 当前功能 |
+| --- | --- |
+| 批量重命名 | 原名称与连续编号模板、执行前预览、冲突检查；确认后修改原文件名。 |
+| 图片转格式 | PNG、JPEG、BMP、TIFF、静态 WebP；WebP 支持有损 / 无损输出。 |
+| 图片压缩 | JPEG 质量与图片长边限制，PNG 可保留透明；处理结果另存。 |
+| ZIP 打包 | 选择文件或文件夹，打成 ZIP，结果另存。 |
+| 图片转 PDF | 单图转 PDF、多图合并 PDF。 |
+| PDF 页面工具 | 合并、逐页拆分、提取 / 排序、删除、旋转、页码、文字水印、设置打开密码、填写已知密码后移除保护。 |
+
+处理在本地进行，不上传文档。转换与打包另存结果、区分同名文件，后台处理可取消。压缩结果不保证比原文件小；动画和多帧图片暂不处理。
+
+**范围说明：** 图片 PDF 不包含 OCR；Office 文档转换、PDF 压缩、OCR、数字签名尚未提供，交互表单与带数字签名的 PDF 暂不处理。常用 PDF 任务最多 512 页，合并最多 200 个文件、输入合计 128 MB。后续范围见 [PDF 工具计划](windows/PDF-TOOLS-PLAN.zh-CN.md)。
+
+### 设置与日常操作
+
+提供浅色、深色和跟随系统；可暂停自动收集、复制最近一张、修改截图收件夹、设置开机启动、检查更新，以及重看更新公告。
+
+![v1.5.1 常规设置界面](docs/screenshots/settings-v1.5.1-light.png)
+
+上图来自 v1.5.1 的隔离测试实例。设置使用实色背景，截图容器保留原有玻璃效果；开关状态仅为测试示例。
+
+## 快速开始
+
+1. 安装或完整解压后运行 `Snapline.exe`，程序驻留系统托盘。
+2. 使用 `Win + Shift + S` 截图、复制一张图片，或使用 Snapline 的区域截图。
+3. 鼠标停在屏幕顶部，点击托盘图标，或按 `Ctrl + Alt + T` 展开晾衣绳。
+4. 把临时文件拖到右侧暂存架；在展开面板里选择文件并打开处理工具。
+5. 在设置里调整快捷键、外观、收集方式和保存位置，点击“保存更改”。
+
+| 默认操作 | 快捷键 |
+| --- | --- |
+| 显示 / 隐藏截图栏 | `Ctrl + Alt + T` |
+| 区域截图 | `Ctrl + Alt + S` |
+| 清空所有截图分组，保留原文件 | `Ctrl + Alt + Backspace` |
+
+快捷键可在“设置 → 快捷键”修改。若默认显示键被占用，程序会尝试备用组合，并在托盘中显示实际使用的按键。托盘图标也可能位于任务栏的“隐藏图标”菜单中。
+
+## 文件保存、拖放与隐私
+
+- 截图默认保存在 `%LOCALAPPDATA%\Snapline\Inbox`，设置保存在 `%LOCALAPPDATA%\Snapline\settings.json`。可在“设置 → 存储”更改收件夹，旧图片不会自动搬迁。
+- **取下一张与清空全部不同**：叉号或 `D / Delete` 会将当前 / 默认收件夹内的图片送入回收站；外部图片和旧自定义收件夹中的图片只移除卡片。清空全部截图分组保留原文件。
+- 截图成功拖入接收应用后仍留在绳上；拖到无人接收区域松开时，默认只取下卡片并保留原文件，`Esc` 取消保留。此行为可在设置中关闭。
+- 目标应用需要支持接收图片 / 文件。Snapline 与目标应用的权限级别应一致；管理员权限运行的聊天软件可能无法接收普通权限程序的拖放。
+- 收集并不限于系统截图，也包括符合格式规则的剪贴板图片。可关闭“收集剪贴板图片”，或暂停所有自动收集。
+- 已知文字、表格、矢量对象及 Office / WPS 对象预览会跳过。v1.5.1 额外检查 WPS 剪贴板拥有者，因此 **从 WPS 复制的普通图片也会跳过**，需要时可使用区域截图。反馈者的 WPS 现场仍需复测，见 [Issue #2](https://github.com/jiuyang5354/snapline-windows/issues/2)。
+- 截图、暂存和文件处理不上传内容。更新检查访问 GitHub 的公开更新文件，下载访问 GitHub 及其资产 CDN；不发送截图、剪贴板内容或本地路径。
+
+## 更新与旧版本
+
+自动检查更新默认开启，**包含预发布版本**：启动约 15 秒后尝试检查，之后每 24 小时最多检查一次；也可从托盘手动检查。下载会核对大小与 SHA-256，安装版下载 EXE 后由你确认覆盖安装，便携版下载 ZIP 后需先退出再完整解压。
+
+**旧版本的 Release、安装包、便携包、源码、校验文件及标签继续保留。** [历史版本索引](docs/VERSIONS.md) 列出各版可用下载；[更新记录](CHANGELOG.md) 保留功能变化。回退前请先备份截图、设置和暂存记录。
+
+改版前的仓库介绍也保存在 Git 历史中：[查看旧版 README](https://github.com/jiuyang5354/snapline-windows/blob/d39864addb2f2d050e441b73e36cadace6b3a8ad/README.md)。
+
+## 验证与反馈
+
+v1.5.1 已完成静默收集、剪贴板格式与来源、受限内存、设置与动效、工具集成，以及安装 / 覆盖升级 / 卸载检查。自动检查不代表所有用户环境均已验证；WPS 反馈现场、其他设备、多屏和不同缩放仍需实际反馈。记录见 [QA.md](windows/QA.md)。
+
+遇到问题请在 [Issues](https://github.com/jiuyang5354/snapline-windows/issues) 提供软件版本、Windows 版本、触发步骤和错误原文。有启动问题时可附默认数据目录里的 `diagnostics.log`；剪贴板问题可附 `clipboard-error.log`。无需上传私人文档、设计源文件或完整设置文件。
+
+## 自行构建
+
+程序使用 **C# / WPF / Win32 与 .NET Framework 4.8**。在仓库根目录运行：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\build.ps1
 ```
 
-生成的程序位于 `windows/bin/Snapline.exe`。编译使用系统 .NET Framework C# 编译器；脚本按固定摘要下载 PDF / WebP 组件，发行包已包含这些组件，运行时不另行下载。如果系统缺少编译器，安装 .NET Framework 4.8 Developer Pack。
+生成文件位于 `windows/bin/`，运行时须保留配置与整个 `Converters` 目录。构建脚本按锁定版本和 SHA-256 获取转换组件；发行包已附带组件，运行工具时不另行下载。需要相应的 .NET Framework 开发组件，制作安装包另需 NSIS 3.13。详见 [构建与安装说明](windows/INSTALLER.zh-CN.md)。
 
-制作安装包另需 [NSIS 3.13](https://nsis.sourceforge.io/Download)。从官方 ZIP 解压编译器到 `windows/.tools/`，将已发布的便携 ZIP 放在 `windows/`，运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\package-installer.ps1 -Test`。脚本先校验便携 ZIP，再封装同一程序，输出 EXE、安装器源码 ZIP 与独立摘要；安装器验证结果保存在 `windows/qa/output/installer/installer-results.json`，详见 [安装版指南](windows/INSTALLER.zh-CN.md)。
-
-运行现有验证和打包脚本：
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\build.ps1 -Test
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\package.ps1
-```
-
-测试会临时使用系统剪贴板，结束时恢复能读取的原格式；测试期间请暂停复制操作。测试图片与状态使用 `windows/qa/output/` 中的独立目录。
-
-仅检查历史图片恢复、去重结果和受限内存时，可运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\build.ps1 -Storage`。此专项使用生成的普通、透明和 8K 测试图片，给各独立子进程设置 192 MiB 内存上限，不读取用户数据或操作键鼠、剪贴板。
-
-维护发布时，`package.ps1` 根据 EXE 版本生成 ZIP、`SHA256SUMS.txt` 与 `windows/dist/update.json`；随后 `package-installer.ps1 -Test` 构建并验证安装器，将同版本 EXE 的大小、地址与 SHA-256 加入该版本文件。先上传并核对 EXE 和 ZIP 发布文件，再将版本文件复制至仓库根目录的 `update.json` 并推送，避免客户端提示尚未完成上传的版本。版本文件保留 ZIP 资产以兼容旧客户端，`prerelease` 应与 GitHub Release 的状态一致。
-
-发布 GitHub Release 后，`Publish Windows package` 工作流会自动下载该版本的便携 ZIP，核对 GitHub 资产摘要、SHA-256 文件与 EXE 版本，再发布到 GitHub Packages。预发布的 NuGet 版本带 `-preview` 后缀。工作流发布后会重新下载安装包，逐个核对全部便携文件并检查仓库关联；也可在 Actions 中手动运行，输入已发布的标签。软件包可见性可在 `Package settings` 中查看和管理，具体操作见 [GitHub 官方说明](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)。发布结果可在 [GitHub Actions](https://github.com/jiuyang5354/snapline-windows/actions/workflows/publish-package.yml) 查看，工作流核对全部便携文件（包括转换组件与许可）的下载内容、包可见性和仓库关联。
+另提供 [GitHub Packages / NuGet 包](https://github.com/users/jiuyang5354/packages/nuget/package/jiuyang5354.Snapline.Windows)，当前为 `1.5.1-preview`；下载需要 GitHub 软件包认证。普通用户建议使用上方 EXE 或 ZIP，开发者可查看 [软件包说明](windows/PACKAGE-README.md)。
 
 ## 原作者与许可
 
-- 原项目：[alejandrobujan/tendedero](https://github.com/alejandrobujan/tendedero)。
-- 原作者：**Alejandro Buján**。
-- 参考的上游提交：[`3c866d94d25ee9d1e008aecd9a78a4e9b2bf06a4`](https://github.com/alejandrobujan/tendedero/commit/3c866d94d25ee9d1e008aecd9a78a4e9b2bf06a4)。
-- Windows 实现：C# 5、WPF、.NET Framework 4.8 与 Win32；本仓库只发布 Windows 实现及其文档。
-
-上游代码采用 MIT 许可，但原项目名称、原图标及 `docs/` 图片不在其授权范围内。按上游要求，本版本使用 **Snapline** 名称和新绘制的图标，发布内容不包含原图标或宣传图片，也不代表原作者背书。
-
-原作者版权与完整上游许可保留在 [UPSTREAM-LICENSE.txt](UPSTREAM-LICENSE.txt)。Windows 实现按 [MIT 许可](LICENSE) 提供，详细来源说明见 [NOTICE.md](NOTICE.md)。
+- **Tendedero 原作者：** [Alejandro Buján](https://github.com/alejandrobujan)，[原项目](https://github.com/alejandrobujan/tendedero)，参考提交 `3c866d94d25ee9d1e008aecd9a78a4e9b2bf06a4`。
+- **Windows 版发布与维护：** [jiuyang5354](https://github.com/jiuyang5354)。本仓库只发布 Windows 实现，不是原作者官方 Windows 版本。
+- Windows 实现采用 [MIT 许可](LICENSE)，保留 [上游许可](UPSTREAM-LICENSE.txt)。上游名称、图标与其 `docs/` 图片不在该 MIT 授权范围内，本项目使用独立名称、图标和生成的演示素材。
+- 文件暂存架来源、PDFsharp、WebP、QingIcon 以及设计参考说明见 [NOTICE.md](NOTICE.md)；随包保留各组件自己的许可和声明。
