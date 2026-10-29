@@ -29,6 +29,19 @@ namespace Snapline
         internal static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
         [DllImport("user32.dll")]
         internal static extern uint GetClipboardSequenceNumber();
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetClipboardOwner();
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+        internal static string ClipboardOwnerProcess()
+        {
+            uint process;
+            if (GetWindowThreadProcessId(GetClipboardOwner(), out process) == 0 || process == 0) return null;
+            try { using (var owner = System.Diagnostics.Process.GetProcessById((int)process)) return owner.ProcessName; }
+            catch (ArgumentException) { return null; }
+            catch (InvalidOperationException) { return null; }
+            catch (System.ComponentModel.Win32Exception) { return null; }
+        }
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool OpenClipboard(IntPtr window);
         [DllImport("user32.dll")]

@@ -85,6 +85,7 @@ namespace Snapline
             ApplyAppearance();
             Part<CheckBox>("CollectToggle").IsChecked = settings.ListenClipboard;
             Part<CheckBox>("PauseToggle").IsChecked = settings.CollectionPaused;
+            Part<CheckBox>("ShowOnCaptureToggle").IsChecked = settings.ShowOnCapture;
             Part<CheckBox>("UpdateToggle").IsChecked = settings.AutoCheckUpdates;
             Part<CheckBox>("CursorToggle").IsChecked = settings.IncludeCursor;
             Part<CheckBox>("BlankDropToggle").IsChecked = settings.RemoveOnBlankDrop;
@@ -103,7 +104,7 @@ namespace Snapline
             SetCaptureCandidate(controller.Sink.CaptureHotkeyKey, controller.Sink.CaptureHotkeyModifiers);
             SetClearCandidate(controller.Sink.ClearHotkeyKey, controller.Sink.ClearHotkeyModifiers);
             RefreshKeyHint(KeyHelp);
-            foreach (string name in new[] { "CollectToggle", "PauseToggle", "StartupToggle", "UpdateToggle", "CursorToggle", "BlankDropToggle", "ShelfToggle", "ShelfAnyAppToggle", "ShelfKeepToggle" }) {
+            foreach (string name in new[] { "CollectToggle", "PauseToggle", "ShowOnCaptureToggle", "StartupToggle", "UpdateToggle", "CursorToggle", "BlankDropToggle", "ShelfToggle", "ShelfAnyAppToggle", "ShelfKeepToggle" }) {
                 Part<CheckBox>(name).Checked += delegate { Feedback("有未保存的修改", false); };
                 Part<CheckBox>(name).Unchecked += delegate { Feedback("有未保存的修改", false); };
             }
@@ -269,11 +270,13 @@ namespace Snapline
             }
             string previousAppearance = controller.Store.Settings.Appearance;
             bool previousBlankDrop = controller.Store.Settings.RemoveOnBlankDrop;
+            bool previousShowOnCapture = controller.Store.Settings.ShowOnCapture;
+            controller.Store.Settings.ShowOnCapture = Part<CheckBox>("ShowOnCaptureToggle").IsChecked == true;
             controller.Store.Settings.RemoveOnBlankDrop = Part<CheckBox>("BlankDropToggle").IsChecked == true;
             controller.Store.Settings.Appearance = appearance;
             try { controller.Store.Save(); }
-            catch (System.IO.IOException ex) { controller.Store.Settings.Appearance = previousAppearance; controller.Store.Settings.RemoveOnBlankDrop = previousBlankDrop; Feedback("外观保存失败：" + ex.Message, true); return; }
-            catch (UnauthorizedAccessException ex) { controller.Store.Settings.Appearance = previousAppearance; controller.Store.Settings.RemoveOnBlankDrop = previousBlankDrop; Feedback("外观保存失败：" + ex.Message, true); return; }
+            catch (System.IO.IOException ex) { controller.Store.Settings.Appearance = previousAppearance; controller.Store.Settings.RemoveOnBlankDrop = previousBlankDrop; controller.Store.Settings.ShowOnCapture = previousShowOnCapture; Feedback("设置保存失败：" + ex.Message, true); return; }
+            catch (UnauthorizedAccessException ex) { controller.Store.Settings.Appearance = previousAppearance; controller.Store.Settings.RemoveOnBlankDrop = previousBlankDrop; controller.Store.Settings.ShowOnCapture = previousShowOnCapture; Feedback("设置保存失败：" + ex.Message, true); return; }
             controller.Files.Window.ApplyAppearance(appearance);
             DialogResult = true;
         }

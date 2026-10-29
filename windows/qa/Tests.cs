@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -62,6 +63,7 @@ namespace Snapline
             if (args.Length == 2 && args[0] == "--clipboard") return CheckClipboardSafety(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--inbox") return CheckInboxLocation(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--settings") return CheckSettingsOnly(Path.GetFullPath(args[1]));
+            if (args.Length == 2 && args[0] == "--quiet-capture") return CheckQuietCapture(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--announcement-content") {
                 string announcementOutput = Path.GetFullPath(args[1]); Directory.CreateDirectory(announcementOutput);
                 var announcementApp = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -1451,6 +1453,16 @@ namespace Snapline
                 foreach (string[] formats in new[] { new[] { "PNG", DataFormats.Html, "Chromium internal source URL" },
                     new[] { DataFormats.Bitmap, DataFormats.Dib, "Object Descriptor", "Embed Source" } })
                     Check(Controller.CanCollectClipboard(formats), "Ordinary images are not mistaken for Office objects: " + formats[0]);
+                foreach (string owner in new[] { "wpp", "wps", "et", "WPP" }) {
+                    int reads = 0; Shot unexpected; Exception failure;
+                    var preview = new ClipboardFixture { Formats = new[] { "PNG" }, Fetch = delegate { reads++; return new MemoryStream(png); } };
+                    var ownerStore = new ImageStore(Path.Combine(output, "wps-owner-" + owner + "-" + Guid.NewGuid().ToString("N")));
+                    Check(Controller.TryCollectClipboard(delegate { reads++; return preview; }, ownerStore, out unexpected, out failure,
+                        delegate { return preview.Formats; }, delegate { return owner; }) && unexpected == null && failure == null && reads == 0 && ownerStore.Items.Count == 0,
+                        "WPS-owned previews without object markers are skipped before provider access: " + owner);
+                }
+                foreach (string owner in new[] { "SnippingTool", "ScreenClippingHost", "chrome", "explorer", null })
+                    Check(Controller.CanCollectClipboard(new[] { "PNG" }, owner), "Normal image collection is independent of the foreground WPS window: " + owner);
                 Check(Controller.ReadClipboardImage(null) == null, "An empty clipboard has no image");
                 var own = new ClipboardFixture { Formats = new[] { Controller.ClipboardOrigin, "PNG" }, Fetch = delegate { throw new Exception("Own clipboard was read"); } };
                 Check(Controller.ReadClipboardImage(own) == null && own.Reads == 0, "Own clipboard images do not feed back into collection");
@@ -1665,6 +1677,65 @@ namespace Snapline
                 Console.WriteLine("PASS " + checks.Count + " inbox checks using isolated fixtures; no keyboard, mouse or clipboard input."); return 0;
             }
             catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+            finally { if (controller != null) controller.Dispose(); app.Shutdown(); }
+        }
+
+        private static int CheckQuietCapture(string output)
+        {
+            Directory.CreateDirectory(output);
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            Controller controller = null;
+            try {
+                string root = Path.Combine(output, "run-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(root);
+                File.WriteAllText(Path.Combine(root, "settings.json"), "{\"Paths\":[],\"ListenClipboard\":false,\"AutoCheckUpdates\":false}");
+                var store = new ImageStore(root);
+                Check(new Settings().ShowOnCapture && store.Settings.ShowOnCapture, "New and legacy settings preserve automatic reveal by default");
+                store.Settings.ShowOnCapture = false; store.Settings.WatchFolder = null;
+                store.Settings.HotkeyKey = FreeHotkey(7); store.Settings.HotkeyModifiers = 7;
+                store.Settings.CaptureHotkeyKey = FreeHotkey(6); store.Settings.CaptureHotkeyModifiers = 6;
+                store.Settings.ClearHotkeyKey = FreeHotkey(5); store.Settings.ClearHotkeyModifiers = 5; store.Save();
+                controller = new Controller(root, true, new Updates(new UpdateHandler { Json = Encoding.UTF8.GetBytes("[]") }));
+                controller.Busy = true;
+                Check(!controller.Store.Settings.ShowOnCapture, "An explicitly disabled automatic reveal survives restart");
+                var peek = typeof(Controller).GetField("peekUntil", BindingFlags.Instance | BindingFlags.NonPublic);
+                string silent = Path.Combine(controller.Store.Inbox, "silent.png");
+                File.WriteAllBytes(silent, ImageStore.Png(Fixture(310, 220, 91))); Pump(650);
+                Check(controller.Store.Items.Count == 1 && File.Exists(silent) && !controller.Line.Revealed &&
+                    (DateTime)peek.GetValue(controller) == default(DateTime), "The real folder watcher saves new screenshots without revealing or extending a peek");
+                controller.Toggle(); Pump(80);
+                Check(controller.Line.Revealed, "The shared tray and hotkey toggle still reveals the line in quiet mode");
+                var shot = controller.Store.AddBitmap(Fixture(315, 220, 92));
+                controller.Captured(shot);
+                Check(controller.Line.Revealed && (DateTime)peek.GetValue(controller) == default(DateTime), "Quiet collection leaves an already visible line visible without pinning it");
+                controller.Line.Tuck(); Pump(260);
+                DialogAction(controller, delegate(SettingsWindow dialog) {
+                    dialog.ShowPage("General");
+                    Check(dialog.Part<CheckBox>("ShowOnCaptureToggle").IsChecked == false, "Settings displays the saved quiet mode");
+                    dialog.Part<CheckBox>("ShowOnCaptureToggle").IsChecked = true;
+                    Check(dialog.Part<TextBlock>("SettingsFeedback").Text == "有未保存的修改", "Changing automatic reveal uses the existing unsaved feedback");
+                    dialog.Part<Button>("CancelSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                });
+                Check(!controller.Store.Settings.ShowOnCapture && !new ImageStore(root).Settings.ShowOnCapture, "Cancel preserves quiet mode in memory and on disk");
+                DialogAction(controller, delegate(SettingsWindow dialog) {
+                    dialog.Part<CheckBox>("ShowOnCaptureToggle").IsChecked = true;
+                    dialog.Part<Button>("SaveSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                });
+                Check(controller.Store.Settings.ShowOnCapture && new ImageStore(root).Settings.ShowOnCapture, "Saving enables automatic reveal immediately and persists it");
+                controller.Busy = true;
+                string visible = Path.Combine(controller.Store.Inbox, "visible.png");
+                File.WriteAllBytes(visible, ImageStore.Png(Fixture(320, 220, 93))); Pump(650);
+                Check(controller.Store.Items.Count == 3 && controller.Line.Revealed && (DateTime)peek.GetValue(controller) > DateTime.UtcNow,
+                    "The same real watcher reveals new screenshots again when enabled");
+                DialogAction(controller, delegate(SettingsWindow dialog) {
+                    dialog.Part<CheckBox>("ShowOnCaptureToggle").IsChecked = false;
+                    dialog.Part<Button>("SaveSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                });
+                Check(!controller.Store.Settings.ShowOnCapture && !new ImageStore(root).Settings.ShowOnCapture && !controller.Store.Settings.CollectionPaused,
+                    "Saving quiet mode does not pause collection");
+                File.WriteAllLines(Path.Combine(output, "quiet-capture-results.txt"), checks);
+                Console.WriteLine("PASS " + checks.Count + " quiet capture checks without system clipboard or keyboard/mouse input."); return 0;
+            } catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
             finally { if (controller != null) controller.Dispose(); app.Shutdown(); }
         }
 

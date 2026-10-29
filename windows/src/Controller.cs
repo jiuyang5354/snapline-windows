@@ -197,7 +197,7 @@ namespace Snapline
             if (!Native.IsFullScreen(Native.GetForegroundWindow(), display.Bounds)) Line.Reveal(display);
         }
 
-        private void Captured(Shot shot) { Peek(2.2); }
+        internal void Captured(Shot shot) { if (Store.Settings.ShowOnCapture) Peek(2.2); }
 
         private void Tick(object sender, EventArgs args)
         {
@@ -244,7 +244,7 @@ namespace Snapline
             if (disposed || Store.Settings.CollectionPaused || !Store.Settings.ListenClipboard || sequence == lastSequence || Native.GetClipboardSequenceNumber() != sequence) return;
             Shot shot; Exception error;
             if (TryCollectClipboard(delegate { return Native.GetClipboardSequenceNumber() == sequence ? Clipboard.GetDataObject() : null; },
-                Store, out shot, out error, Native.ClipboardFormats)) {
+                Store, out shot, out error, Native.ClipboardFormats, Native.ClipboardOwnerProcess)) {
                 lastSequence = sequence;
                 if (shot != null) Captured(shot);
                 return;
@@ -260,12 +260,13 @@ namespace Snapline
             retry.Start();
         }
 
-        internal static bool TryCollectClipboard(Func<System.Windows.IDataObject> read, ImageStore store, out Shot shot, out Exception error, Func<string[]> readFormats = null)
+        internal static bool TryCollectClipboard(Func<System.Windows.IDataObject> read, ImageStore store, out Shot shot, out Exception error, Func<string[]> readFormats = null, Func<string> readOwner = null)
         {
             shot = null; error = null;
             try {
                 string[] formats = readFormats == null ? null : readFormats();
                 if (formats != null && !CanCollectClipboard(formats)) return true;
+                if (readOwner != null && IsWpsClipboardOwner(readOwner())) return true;
                 var image = ReadClipboardImage(read(), formats);
                 if (image != null) shot = store.AddBitmap(image);
                 return true;
@@ -286,8 +287,9 @@ namespace Snapline
                 (log == null ? "" : "错误记录：clipboard-error.log"));
         }
 
-        internal static bool CanCollectClipboard(string[] formats)
+        internal static bool CanCollectClipboard(string[] formats, string ownerProcess = null)
         {
+            if (IsWpsClipboardOwner(ownerProcess)) return false;
             foreach (string ignored in new[] { ClipboardOrigin, DataFormats.UnicodeText, DataFormats.Text, DataFormats.OemText,
                 DataFormats.StringFormat, DataFormats.Rtf, DataFormats.CommaSeparatedValue, "XML Spreadsheet", "PDF", "Portable Document Format", "SVG", "image/svg+xml" })
                 if (HasClipboardFormat(formats, ignored)) return false;
@@ -323,6 +325,12 @@ namespace Snapline
 
         // Office/WPS render editable objects beside their private shape data; those images are previews.
         private static readonly string[] OfficeObjectMarkers = { "GVML", "PowerPoint", "Office Drawing", "Kingsoft", "WPS" };
+        internal static bool IsWpsClipboardOwner(string process)
+        {
+            return string.Equals(process, "wpp", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(process, "wps", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(process, "et", StringComparison.OrdinalIgnoreCase);
+        }
         internal static bool IsOfficeObjectFormat(string format)
         {
             if (string.IsNullOrEmpty(format)) return false;

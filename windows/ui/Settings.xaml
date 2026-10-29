@@ -159,6 +159,14 @@
               </StackPanel>
               <CheckBox x:Name="PauseToggle" Style="{StaticResource Toggle}" HorizontalAlignment="Right" AutomationProperties.Name="暂停所有自动收集" />
             </Grid>
+            <Border Style="{StaticResource Rule}" />
+            <Grid Style="{StaticResource SettingRow}">
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="收集新截图时自动展开" />
+                <TextBlock Text="关闭后静默收集；顶部悬停、快捷键仍可展开。" Style="{StaticResource Quiet}" Margin="0,5,0,0" />
+              </StackPanel>
+              <CheckBox x:Name="ShowOnCaptureToggle" Style="{StaticResource Toggle}" HorizontalAlignment="Right" IsChecked="True" AutomationProperties.Name="收集新截图时自动展开" />
+            </Grid>
             <TextBlock Text="应用行为" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,14,0,2" />
             <Grid Style="{StaticResource SettingRow}">
               <StackPanel VerticalAlignment="Center">

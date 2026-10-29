@@ -22,6 +22,7 @@ namespace Snapline
         [DataMember] public uint CaptureHotkeyKey = Hotkey.DefaultCaptureKey;
         [DataMember] public uint CaptureHotkeyModifiers = Hotkey.DefaultModifiers;
         [DataMember] public bool CollectionPaused;
+        [DataMember] public bool ShowOnCapture = true;
         [DataMember] public string Appearance;
         [DataMember] public bool RemoveOnBlankDrop = true;
         [DataMember] public uint ClearHotkeyKey = Hotkey.DefaultClearKey;
@@ -45,6 +46,7 @@ namespace Snapline
             ClearHotkeyKey = Hotkey.DefaultClearKey;
             ClearHotkeyModifiers = Hotkey.DefaultModifiers;
             AutoCheckUpdates = true;
+            ShowOnCapture = true;
             FileShelfEnabled = true;
             RemoveOnBlankDrop = true;
         }

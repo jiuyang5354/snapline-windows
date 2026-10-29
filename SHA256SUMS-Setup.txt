@@ -1,2 +1,2 @@
-690259fe358c8c9c829e59da4f1f21a5ca1ee5fea60b98c884130a2f01c0439e  Snapline-Windows-Setup-v1.5.0.exe
-f46e57eb6797460bd79b5d7c55e3071490a921951664f86d51cff49f0920e00c  Snapline-Windows-Installer-Source-v1.5.0.zip
+d37d8848bdb11fcd34b30f6b965b936205b008a77740b692204ea7d17ffd5980  Snapline-Windows-Setup-v1.5.1.exe
+a2fab357bfb38d782ff5d0a5649602343e61e07d4e9a4f7ffc90d18cf9e5ac0e  Snapline-Windows-Installer-Source-v1.5.1.zip
