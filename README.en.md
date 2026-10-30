@@ -1,12 +1,28 @@
-[中文](README.md) | **English**
+<p align="center">
+  <img src="docs/snapline-icon.png" width="96" height="96" alt="Snapline icon">
+</p>
 
-# Snapline · Screenshot clothesline and file shelf
+<h1 align="center">Snapline</h1>
 
-Keep screenshots at the top of your screen and temporary files within reach.
+<p align="center"><strong>Keep screenshots at the top of your screen and temporary files within reach.</strong></p>
+<p align="center">A screenshot clothesline, floating file shelf and offline image / PDF tools for Windows.</p>
+<p align="center">Windows 桌面截图与文件工具，平时收起，需要时展开。</p>
 
-Snapline is a Windows desktop utility for collecting screenshots, browsing image history, staging files by drag and drop, and processing images, PDFs, filenames and ZIP archives locally. Reveal it from the screen edge, a hotkey or the tray when needed.
+<p align="center">
+  <a href="https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.5.1"><img src="https://img.shields.io/badge/version-v1.5.1%20Beta%202-e8a44d" alt="v1.5.1 Beta 2"></a>
+  <a href="#download"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011-4793d7" alt="Windows 10 / 11"></a>
+  <a href="#download"><img src="https://img.shields.io/badge/.NET%20Framework-4.8%2B-846cc4" alt=".NET Framework 4.8+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-63ad93" alt="MIT license"></a>
+</p>
 
-This is an **unofficial Windows implementation of [Tendedero](https://github.com/alejandrobujan/tendedero) by [Alejandro Buján](https://github.com/alejandrobujan)**, published and maintained by [jiuyang5354](https://github.com/jiuyang5354). It uses its own name and icon and is not an official release or endorsement by the upstream author.
+<p align="center"><a href="https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Setup-v1.5.1.exe">Download EXE</a> · <a href="#quick-start">Quick start</a> · <a href="#features">Features</a> · <a href="#faq">FAQ</a> · <a href="docs/VERSIONS.md">Previous versions</a> · <a href="https://github.com/jiuyang5354/snapline-windows/issues">Feedback</a></p>
+<p align="center"><a href="README.md">简体中文</a> | <strong>English</strong></p>
+
+## Beta status
+
+- This is a public prerelease. Compatibility across other machines and applications is still being evaluated; see the limitations and verification scope below.
+- Back up screenshots, settings and shelf records before updating. [Previous releases](docs/VERSIONS.md) remain available for rollback.
+- This is an **unofficial Windows implementation of [Tendedero](https://github.com/alejandrobujan/tendedero) by [Alejandro Buján](https://github.com/alejandrobujan)**, published and maintained by [jiuyang5354](https://github.com/jiuyang5354). It uses its own name and icon and is not an official release or endorsement by the upstream author.
 
 ## Download
 
@@ -112,6 +128,24 @@ The previous introduction remains in Git history: [earlier English README](https
 v1.5.1 passed quiet-collection, clipboard format/source, constrained-memory, settings/motion, tool-integration and installation/upgrade/uninstall checks. Automated checks do not cover every user environment; the WPS report, other devices, multiple monitors and different scaling still need field feedback. See [QA](windows/QA.md).
 
 When opening an [issue](https://github.com/jiuyang5354/snapline-windows/issues), include the app version, Windows version, steps and exact error. Startup reports can include `diagnostics.log`; clipboard reports can include `clipboard-error.log` from the app data folder. Private documents, design source files and complete settings files are not needed.
+
+## FAQ
+
+### Should I download the EXE or ZIP?
+
+The **EXE installer** is recommended for most users and creates a desktop shortcut by default. The ZIP is portable: extract the entire package before running `Snapline.exe`. See [Download](#download).
+
+### Why is there no window after launching?
+
+Snapline runs in the system tray. Hover at the top edge, click its tray icon, or press the default `Ctrl + Alt + T` shortcut to reveal the clothesline. The icon may be under hidden tray icons.
+
+### Why does a chat app reject a dragged image?
+
+The receiving app must accept image or file drops, and both apps should run at the same privilege level. Try dragging the same file from File Explorer into the same input area as a control test.
+
+### Are my files uploaded or deleted when removed?
+
+Screenshot, shelf and file-tool processing stays local; update checks and downloads connect to GitHub. Removing shelf entries preserves the original files. Removing one screenshot and clearing all groups have different file-handling rules; see the file storage and privacy section.
 
 ## Build
 

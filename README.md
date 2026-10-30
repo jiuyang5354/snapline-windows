@@ -1,12 +1,34 @@
-**中文** | [English](README.en.md)
+<p align="center">
+  <img src="docs/snapline-icon.png" width="96" height="96" alt="Snapline 图标">
+</p>
 
-# Snapline · 截图晾衣绳与文件暂存架
+<h1 align="center">Snapline</h1>
 
-把截图挂到屏幕顶部，把临时文件放到手边。
+<p align="center"><strong>把截图挂到屏幕顶部，把临时文件放到手边。</strong></p>
+<p align="center">截图晾衣绳 · 文件暂存架 · 本地图片与 PDF 工具</p>
+<p align="center">A Windows desktop utility for screenshots, temporary files and local image / PDF processing.</p>
 
-Snapline 是一款 Windows 桌面工具：收集截图、翻看历史图片、拖拽暂存文件，并在本地完成图片转换、PDF 处理、批量重命名和 ZIP 打包。平时收起，需要时通过屏幕边缘、快捷键或托盘展开。
+<p align="center">
+  <a href="https://github.com/jiuyang5354/snapline-windows/releases/tag/v1.5.1"><img src="https://img.shields.io/badge/version-v1.5.1%20Beta%202-e8a44d" alt="v1.5.1 Beta 2"></a>
+  <a href="#下载"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011-4793d7" alt="Windows 10 / 11"></a>
+  <a href="#下载"><img src="https://img.shields.io/badge/.NET%20Framework-4.8%2B-846cc4" alt=".NET Framework 4.8+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-63ad93" alt="MIT license"></a>
+</p>
 
-本项目是 **[Alejandro Buján](https://github.com/alejandrobujan) 的 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 实现**，由 [jiuyang5354](https://github.com/jiuyang5354) 发布与维护。使用独立名称和图标，不代表原作者官方版本或背书。
+<p align="center"><a href="https://github.com/jiuyang5354/snapline-windows/releases/download/v1.5.1/Snapline-Windows-Setup-v1.5.1.exe">下载 EXE</a> · <a href="#快速开始">快速开始</a> · <a href="#能做什么">能做什么</a> · <a href="#常见问题">常见问题</a> · <a href="docs/VERSIONS.md">历史版本</a> · <a href="https://github.com/jiuyang5354/snapline-windows/issues">反馈建议</a></p>
+<p align="center"><strong>简体中文</strong> | <a href="README.en.md">English</a></p>
+
+> **English summary**
+>
+> Snapline is a Windows desktop utility that keeps screenshots on a clothesline at the top of the screen and temporary files on a floating shelf. It also offers local image conversion, PDF tools, batch renaming and ZIP packaging. Files are processed on your computer without uploading their contents.
+>
+> **Status: v1.5.1 Beta 2, a public prerelease.** Requires Windows 10/11 and .NET Framework 4.8 or later; WebP tools require 64-bit Windows. See the [full English README](README.en.md) for setup, usage and limitations.
+
+## Beta 说明
+
+- 当前为预发布测试版，仍在收集不同电脑与软件环境的兼容性反馈。已知限制与验证范围见下文。
+- 更新前建议备份截图、设置与暂存记录；[历史版本下载](docs/VERSIONS.md)继续保留，方便回退。
+- 本项目是 **[Alejandro Buján](https://github.com/alejandrobujan) 的 [Tendedero](https://github.com/alejandrobujan/tendedero) 的非官方 Windows 实现**，由 [jiuyang5354](https://github.com/jiuyang5354) 发布与维护。使用独立名称和图标，不代表原作者官方版本或背书。
 
 ## 下载
 
@@ -112,6 +134,24 @@ Snapline 是一款 Windows 桌面工具：收集截图、翻看历史图片、�
 v1.5.1 已完成静默收集、剪贴板格式与来源、受限内存、设置与动效、工具集成，以及安装 / 覆盖升级 / 卸载检查。自动检查不代表所有用户环境均已验证；WPS 反馈现场、其他设备、多屏和不同缩放仍需实际反馈。记录见 [QA.md](windows/QA.md)。
 
 遇到问题请在 [Issues](https://github.com/jiuyang5354/snapline-windows/issues) 提供软件版本、Windows 版本、触发步骤和错误原文。有启动问题时可附默认数据目录里的 `diagnostics.log`；剪贴板问题可附 `clipboard-error.log`。无需上传私人文档、设计源文件或完整设置文件。
+
+## 常见问题
+
+### 应该下载 EXE 还是 ZIP？
+
+普通用户建议下载上方的 **EXE 安装包**，按提示安装即可，默认创建桌面快捷方式。ZIP 是便携版，需要完整解压后运行 `Snapline.exe`。两种方式的具体区别见[下载](#下载)。
+
+### 安装后怎么没有看到窗口？
+
+Snapline 驻留系统托盘。把鼠标停在屏幕顶部、点击托盘图标，或按默认快捷键 `Ctrl + Alt + T` 展开截图栏。托盘图标可能位于“隐藏图标”菜单中。
+
+### 为什么拖不进聊天软件？
+
+目标应用需要支持图片或文件拖放，两个程序的权限级别也应一致。可先从资源管理器拖入同一输入区做对照；若同样不能接收，先检查目标软件与权限设置。
+
+### 文件会上传吗？取下卡片会删除文件吗？
+
+截图、暂存和文件处理在本地进行；更新检查与下载会连接 GitHub。暂存架移除条目保留原文件；截图的“取下一张”和“清空全部”处理不同，操作前请查看[文件保存、拖放与隐私](#文件保存拖放与隐私)。
 
 ## 自行构建
 
